@@ -1,7 +1,20 @@
 #include "main.h"
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <numeric>
+
+pros::Controller controller(pros::E_CONTROLLER_MASTER);	
+pros::Motor left_primary(11, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(4, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_primary(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+
+pros::Motor left_angle(3, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_angle(10,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+
+pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
+pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
 
 /**
  * A callback function for LLEMU's center button.
@@ -19,9 +32,9 @@ void on_center_button() {}
  */
 void initialize() {
 	pros::lcd::initialize();
-	pros::lcd::set_text(1, "Hello PROS User!");
+	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 
-	pros::lcd::register_btn1_cb(on_center_button);
 }
 
 /**
@@ -68,27 +81,24 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
+void rotate_modules(double goal) {
+    for (size_t i = 0; i < angle_motors.size(); i++) {
+        pros::Motor& motor = angle_motors[i];
+		float proportional_voltage = (127.0/45)*(goal-(motor.get_position()*5.5));
+		motor.move_voltage(proportional_voltage);
+	}
+}
+
+
 void opcontrol() {
-	pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 
-	pros::Motor left_primary(11, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor center_primary(4, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor right_primary(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-
-	pros::Motor left_angle(3, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor right_angle(10,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-
-	pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
-	pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
-	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
-	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 
 	angle_motors.tare_position();
 	//angle_motors.set_zero_position(90);
 	//double right_theta;
 	double translate_magnitude;
 	double translate_direction;
+	double direction_goal;
 	bool reverse_direction = false;
 
 	while (true) {
@@ -106,19 +116,6 @@ void opcontrol() {
 			}
 		}
 
-		// Get the average direction of the motors and store it in average_direction
-		// std::vector<double> directions = angle_motors.get_positions();
-		// double average_direction = std::accumulate(directions.begin(), directions.end(), 0.0) / directions.size();
-		
-		// Compare the direction of the wheels to the opposite direction,
-		// to see which is closest to the goal.
-
-		// if the difference between the current direction and goal is more than 90 degrees, flip the goal and the direction of wheels.
-		// if (abs(abs(translate_direction) - abs(average_direction))){
-		// 	translate_direction += 180;
-		// 	reverse_direction
-			
-		// }
 		pros::lcd::print(1, "translate Mag: %f", translate_magnitude);
 		pros::lcd::print(2, "translate Dir: %f", translate_direction);
 
@@ -128,10 +125,7 @@ void opcontrol() {
 		std::printf("translate Mag: %f", translate_magnitude);
 		std::printf("translate Dir: %f", translate_direction);
 		primary_motors.move_velocity(translate_magnitude);
-		
-		angle_motors.move_absolute(translate_direction*5.5, 200);
-
-
+		rotate_modules(translate_direction*5.5);
 		
 		pros::delay(20);
 	}
