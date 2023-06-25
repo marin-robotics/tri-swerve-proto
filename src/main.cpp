@@ -1,5 +1,7 @@
 #include "main.h"
 #include <cmath>
+#include <vector>
+#include <numeric>
 
 /**
  * A callback function for LLEMU's center button.
@@ -73,36 +75,61 @@ void opcontrol() {
 	pros::Motor center_primary(4, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 	pros::Motor right_primary(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-	pros::Motor left_angle(3, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
-	pros::Motor right_angle(10,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+	pros::Motor left_angle(3, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+	pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+	pros::Motor right_angle(10,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 	pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 	pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
-	
+
 	angle_motors.tare_position();
-	angle_motors.set_zero_position(90);
-	double right_theta;
+	//angle_motors.set_zero_position(90);
+	//double right_theta;
+	double translate_magnitude;
+	double translate_direction;
+	bool reverse_direction = false;
 
 	while (true) {
 	//	int left_x = controller.get_analog(ANALOG_LEFT_X);
-		float left_y = float(controller.get_analog(ANALOG_LEFT_Y))/127*200;
+		//float left_y = float(200*controller.get_analog(ANALOG_LEFT_Y))/127;
+		//float left_x = float(200*controller.get_analog(ANALOG_LEFT_X))/127;
+		float left_y = float(controller.get_analog(ANALOG_LEFT_Y));
+		float left_x = float(controller.get_analog(ANALOG_LEFT_X));
 
-		float right_x = float(controller.get_analog(ANALOG_RIGHT_X))/127*200;
-		//int right_y = controller.get_analog(ANALOG_RIGHT_Y);
+		translate_magnitude = sqrt(pow(left_x,2)+pow(left_y,2));
 
-		// if (right_x != 0){
-		// 	right_theta = atan(right_y/right_x);
-		// } else if (right_y > 0) {
-		// 	right_theta = 90;
-		// } else if (right_y < 0){
-		// 	right_theta = 270;
-		// }
+		if (abs(int(translate_magnitude)) > 10){
+			if ((left_y != 0) || (left_x != 0)){
+				translate_direction = ((180/M_PI)*atan2(left_y,left_x))-90;
+			}
+		}
+
+		// Get the average direction of the motors and store it in average_direction
+		// std::vector<double> directions = angle_motors.get_positions();
+		// double average_direction = std::accumulate(directions.begin(), directions.end(), 0.0) / directions.size();
 		
-		primary_motors.move_velocity(left_y);
-		angle_motors.move_velocity(right_x);
+		// Compare the direction of the wheels to the opposite direction,
+		// to see which is closest to the goal.
+
+		// if the difference between the current direction and goal is more than 90 degrees, flip the goal and the direction of wheels.
+		// if (abs(abs(translate_direction) - abs(average_direction))){
+		// 	translate_direction += 180;
+		// 	reverse_direction
+			
+		// }
+		pros::lcd::print(1, "translate Mag: %f", translate_magnitude);
+		pros::lcd::print(2, "translate Dir: %f", translate_direction);
+
+		std::cout << "translate Dir: " << translate_direction;
+        std::cout << "translate Mag: " << translate_magnitude;
+
+		std::printf("translate Mag: %f", translate_magnitude);
+		std::printf("translate Dir: %f", translate_direction);
+		primary_motors.move_velocity(translate_magnitude);
+		
+		angle_motors.move_absolute(translate_direction*5.5, 200);
 
 
 		
