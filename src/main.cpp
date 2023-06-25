@@ -81,43 +81,49 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
+
+// apply a voltage to each turning motor proportional to their distance from the 
+// target rotation, scaled by 5.5 for the physical gearing of the bot.
+
 void rotate_modules(double goal) {
-    for (size_t i = 0; i < angle_motors.size(); i++) {
+    for (size_t i = 0; i < angle_motors.size(); i++) { 
         pros::Motor& motor = angle_motors[i];
-		float proportional_voltage = (127.0/45)*(goal-(motor.get_position()*5.5));
-		motor.move_voltage(proportional_voltage);
+		
+		double current_position = motor.get_position() * 5.5;
+        double error = goal - current_position;
+        motor = int((127.0/(90*5.5)) * error);
+		pros::lcd::print(2, "get pos: %f", motor.get_position());
+		pros::lcd::print(3, "adj pos: %f", current_position);
+		pros::lcd::print(4, "goal: %f", goal);
+		pros::lcd::print(5, "error: %f", error);
+		//pros::lcd::print(5, "error: %f", proportional_voltage);
+		//motor.move_voltage(proportional_voltage);
 	}
 }
 
 
 void opcontrol() {
-
-
 	angle_motors.tare_position();
-	//angle_motors.set_zero_position(90);
-	//double right_theta;
 	double translate_magnitude;
 	double translate_direction;
 	double direction_goal;
 	bool reverse_direction = false;
 
 	while (true) {
-	//	int left_x = controller.get_analog(ANALOG_LEFT_X);
-		//float left_y = float(200*controller.get_analog(ANALOG_LEFT_Y))/127;
-		//float left_x = float(200*controller.get_analog(ANALOG_LEFT_X))/127;
 		float left_y = float(controller.get_analog(ANALOG_LEFT_Y));
 		float left_x = float(controller.get_analog(ANALOG_LEFT_X));
 
 		translate_magnitude = sqrt(pow(left_x,2)+pow(left_y,2));
+		
 
 		if (abs(int(translate_magnitude)) > 10){
 			if ((left_y != 0) || (left_x != 0)){
-				translate_direction = ((180/M_PI)*atan2(left_y,left_x))-90;
+				translate_direction = ((180/M_PI)*atan2(left_y,left_x))+180;
 			}
 		}
 
-		pros::lcd::print(1, "translate Mag: %f", translate_magnitude);
-		pros::lcd::print(2, "translate Dir: %f", translate_direction);
+		
+		pros::lcd::print(1, "translate Dir: %f", translate_direction);
 
 		std::cout << "translate Dir: " << translate_direction;
         std::cout << "translate Mag: " << translate_magnitude;
