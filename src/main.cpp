@@ -1,8 +1,5 @@
 #include "main.h"
-#include <algorithm>
 #include <cmath>
-#include <vector>
-#include <numeric>
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 pros::Motor left_primary(11, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
@@ -87,52 +84,62 @@ void autonomous() {}
 
 void rotate_modules(double goal) {
     for (size_t i = 0; i < angle_motors.size(); i++) { 
-        pros::Motor& motor = angle_motors[i];
+        pros::Motor& motor = angle_motors[i]; 
+		// Motor& lets us directly modify the actual motor's variables
 		
 		double current_position = motor.get_position() * 5.5;
         double error = goal - current_position;
-        motor = int((127.0/(90*5.5)) * error);
-		pros::lcd::print(2, "get pos: %f", motor.get_position());
-		pros::lcd::print(3, "adj pos: %f", current_position);
-		pros::lcd::print(4, "goal: %f", goal);
-		pros::lcd::print(5, "error: %f", error);
-		//pros::lcd::print(5, "error: %f", proportional_voltage);
-		//motor.move_voltage(proportional_voltage);
+
+		// set proportional voltage
+		int proportional_voltage = int((127.0/(90.0*5.5)) * error);
+        motor = proportional_voltage;
+
+		pros::lcd::print(2, "(motor)  raw pos: %f", motor.get_position());
+		pros::lcd::print(3, "(geared) pos: %f", current_position);
+		pros::lcd::print(4, "(geared) goal: %f", goal);
+		pros::lcd::print(5, "(geared) error: %f", error);
+		pros::lcd::print(6, "proportional voltage: %d", proportional_voltage);
 	}
 }
 
 
 void opcontrol() {
 	angle_motors.tare_position();
+
+	// POWER MOTORS
 	double translate_magnitude;
-	double translate_direction;
-	double direction_goal;
 	bool reverse_direction = false;
 
+	// ANGLE MOTORS
+	double translate_direction;
+	double PI = 3.141592;
+
+
 	while (true) {
+		// grab stick inputs
 		float left_y = float(controller.get_analog(ANALOG_LEFT_Y));
 		float left_x = float(controller.get_analog(ANALOG_LEFT_X));
 
+		// polar coordinates! 
+		// use pythagorean theorem to calculate magnitude (r) from rect coords
 		translate_magnitude = sqrt(pow(left_x,2)+pow(left_y,2));
 		
-
+		// deadzone (magnitude < 10, do not rotate)
 		if (abs(int(translate_magnitude)) > 10){
 			if ((left_y != 0) || (left_x != 0)){
-				translate_direction = ((180/M_PI)*atan2(left_y,left_x))+180;
+				// get theta from arctan function using rect coords
+				// then convert radian result to degrees
+				// and translate the result by ? degrees to make the front of the bot 0
+				translate_direction = ((180/PI)*atan2(left_y,left_x))+?;
 			}
+			// else: do not update direction
 		}
 
-		
-		pros::lcd::print(1, "translate Dir: %f", translate_direction);
-
-		std::cout << "translate Dir: " << translate_direction;
-        std::cout << "translate Mag: " << translate_magnitude;
-
-		std::printf("translate Mag: %f", translate_magnitude);
-		std::printf("translate Dir: %f", translate_direction);
 		primary_motors.move_velocity(translate_magnitude);
 		rotate_modules(translate_direction*5.5);
-		
+		// multiply by 5.5 bcs of physical gear ratio of 5.5:1
+
+		pros::lcd::print(1, "(motor space) translate dir: %f", translate_direction);
 		pros::delay(20);
 	}
 }
