@@ -78,6 +78,44 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
+int sgn(double v) {
+  return (v > 0) - (v < 0);
+}
+
+// normalize manipulated angles into the range of 0-360 degrees
+double normalize_angle_360(double angle){
+	bool out_of_range = false;
+
+	if ((angle > 360)||(angle < 0)){
+		out_of_range = true;
+
+		int angle_sign = sgn(angle);
+		if (angle_sign > 0){
+			// get rid of 360 degrees until it is in 0-360 range
+			while (out_of_range){
+				angle -= 360;
+
+				if ((angle <= 360) && (angle >= 0)){
+					out_of_range = false;
+				} 
+			}
+		}
+		else if (angle_sign < 0){
+			// add 360 degrees until it is in 0-360 range
+			while (out_of_range){
+				angle += 360;
+
+				if ((angle <= 360) && (angle >= 0)){
+					out_of_range = false;
+				}
+			}
+		}
+		return angle;
+	}
+	else {
+		return angle;
+	}
+}
 
 // store reverse status of every power motor
 bool power_motor_reverse_status[] = {false, false, false};
@@ -95,21 +133,21 @@ void apply_power_motor_reverse(bool value, int index){
 	}
 }
 
-void rotate_modules(double goal) {
+void rotate_modules(double ungeared_goal) {
     for (size_t i = 0; i < angle_motors.size(); i++) { 
         pros::Motor& angle_motor = angle_motors[i]; 
 		// Motor& lets us directly modify the actual motor's variables
 
 		// CALCULATE CLOSEST ROTATION GOAL
-		double current_position_geared = angle_motor.get_position() *5.5;
+		double current_position = angle_motor.get_position();
 		bool reverse_power_motor = power_motor_reverse_status[i];
 
 		// compare the two different goals & pick which is closer to position
-		double flipped_goal = goal + 180;
-		double goal_after_check = goal;
+		double flipped_goal = normalize_angle_360(ungeared_goal + 180);
+		double goal_after_check = ungeared_goal;
 
 		// if our original goal is farther way from current position than the flipped goal, pick the flipped goal
-		if (abs(int(goal - current_position_geared)) > abs(int(flipped_goal - current_position_geared))) {
+		if (abs(int(ungeared_goal - current_position)) > abs(int(flipped_goal - current_position))) {
 			goal_after_check = flipped_goal;
 			reverse_power_motor = !reverse_power_motor;
 		}
@@ -119,8 +157,8 @@ void rotate_modules(double goal) {
 		apply_power_motor_reverse(reverse_power_motor, i);
 
 
-		// ROTATE MODULES
-		double error = goal_after_check - current_position_geared;
+		// ROTATE MODULES (5.5:1 physical gear ratio)
+		double error = (goal_after_check*5.5) - (current_position*5.5);
 		int proportional_voltage = int((127.0/(90.0*5.5)) * error);
 
 		angle_motor = proportional_voltage;
@@ -160,7 +198,7 @@ void opcontrol() {
 		}
 
 		// apply values to motors
-		rotate_modules(translate_direction*5.5); // physical gear ratio of 5.5:1
+		rotate_modules(translate_direction); // physical gear ratio of 5.5:1
 		primary_motors.move_velocity(translate_magnitude);
 
 		// print values to brain
