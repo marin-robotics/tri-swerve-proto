@@ -125,12 +125,6 @@ void apply_power_motor_reverse(bool value, int index){
 
 	pros::Motor& power_motor = primary_motors[index];
 	power_motor.set_reversed(value);
-	
-	// print the array values HORRIBLE! why can't you just print whole array :(
-	for (size_t i = 0; i < sizeof(power_motor_reverse_status); i++){
-		pros::lcd::print(3 + i, "reverse status of motor %d", i);
-		pros::lcd::print(4 + i, "is equal to %d", power_motor_reverse_status[i]);
-	}
 }
 
 void rotate_modules(double ungeared_goal) {
@@ -139,7 +133,7 @@ void rotate_modules(double ungeared_goal) {
 		// Motor& lets us directly modify the actual motor's variables
 
 		// CALCULATE CLOSEST ROTATION GOAL
-		double current_position = angle_motor.get_position();
+		double current_position = angle_motor.get_position()/5.5;
 		bool reverse_power_motor = power_motor_reverse_status[i];
 
 		// compare the two different goals & pick which is closer to position
@@ -149,17 +143,21 @@ void rotate_modules(double ungeared_goal) {
 		// if our original goal is farther way from current position than the flipped goal, pick the flipped goal
 		if (abs(int(ungeared_goal - current_position)) > abs(int(flipped_goal - current_position))) {
 			goal_after_check = flipped_goal;
-			reverse_power_motor = !reverse_power_motor;
+			reverse_power_motor = true;
 		}
 		// otherwise, just use the original goal
+		else {
+			goal_after_check = ungeared_goal;
+			reverse_power_motor = false;
+		}
 
 		// apply reverse status to array & motor for later reference
 		apply_power_motor_reverse(reverse_power_motor, i);
 
 
 		// ROTATE MODULES (5.5:1 physical gear ratio)
-		double error = (goal_after_check*5.5) - (current_position*5.5);
-		int proportional_voltage = int((127.0/(90.0*5.5)) * error);
+		double error = goal_after_check - current_position;
+		int proportional_voltage = int((127.0/45.0) * error);
 
 		angle_motor = proportional_voltage;
 	}
@@ -192,7 +190,8 @@ void opcontrol() {
 				// get theta from arctan2 function using rect coords
 				// then convert radian result to degrees
 				// and translate the result by ? degrees to make the front of the bot 0
-				translate_direction = ((180/PI)*atan2(left_y,left_x))+0;
+				translate_direction = ((180/PI)*atan2(left_y,left_x))-90;
+				translate_direction = normalize_angle_360(translate_direction);
 			}
 			// else: do not update direction
 		}
@@ -202,8 +201,8 @@ void opcontrol() {
 		primary_motors.move_velocity(translate_magnitude);
 
 		// print values to brain
-		pros::lcd::print(1, "(motor space) translate dir: %f", translate_direction);
-		pros::lcd::print(2, "(geared space) translate dir: %f", translate_direction*5.5);
+		pros::lcd::print(1, "(M space) translate dir: %f", translate_direction);
+		pros::lcd::print(2, "(G space) translate dir: %f", translate_direction*5.5);
 
 		pros::delay(20);
 	}
