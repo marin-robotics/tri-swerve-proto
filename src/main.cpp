@@ -84,37 +84,7 @@ int sgn(double v) {
 
 // normalize manipulated angles into the range of 0-360 degrees
 double normalize_angle_360(double angle){
-	bool out_of_range = false;
-
-	if ((angle > 360)||(angle < 0)){
-		out_of_range = true;
-
-		int angle_sign = sgn(angle);
-		if (angle_sign > 0){
-			// get rid of 360 degrees until it is in 0-360 range
-			while (out_of_range){
-				angle -= 360;
-
-				if ((angle <= 360) && (angle >= 0)){
-					out_of_range = false;
-				} 
-			}
-		}
-		else if (angle_sign < 0){
-			// add 360 degrees until it is in 0-360 range
-			while (out_of_range){
-				angle += 360;
-
-				if ((angle <= 360) && (angle >= 0)){
-					out_of_range = false;
-				}
-			}
-		}
-		return angle;
-	}
-	else {
-		return angle;
-	}
+	return fmod(angle + 360, 360);
 }
 
 // store reverse status of every power motor
@@ -138,15 +108,14 @@ void rotate_modules(double ungeared_goal) {
 
 		// compare the two different goals & pick which is closer to position
 		double flipped_goal = normalize_angle_360(ungeared_goal + 180);
-		double goal_after_check = ungeared_goal;
+		double goal_after_check;
 
 		// if our original goal is farther way from current position than the flipped goal, pick the flipped goal
 		if (abs(int(ungeared_goal - current_position)) > abs(int(flipped_goal - current_position))) {
 			goal_after_check = flipped_goal;
 			reverse_power_motor = true;
 		}
-		// otherwise, just use the original goal
-		else {
+		else { // otherwise, just use the original goal
 			goal_after_check = ungeared_goal;
 			reverse_power_motor = false;
 		}
@@ -163,6 +132,36 @@ void rotate_modules(double ungeared_goal) {
 	}
 }
 
+void rotate_modules_gpt(double ungeared_goal) {
+    for (size_t i = 0; i < angle_motors.size(); i++) { 
+        pros::Motor& angle_motor = angle_motors[i];
+        
+        double current_position = angle_motor.get_position()/5.5;
+        bool reverse_power_motor = power_motor_reverse_status[i];
+        double flipped_goal = normalize_angle_360(ungeared_goal + 180);
+        double goal_after_check;
+
+        // The following two if-else blocks are merged into one more readable statement
+        reverse_power_motor = abs(int(ungeared_goal - current_position)) > 
+            abs(int(flipped_goal - current_position));
+        
+        goal_after_check = reverse_power_motor ? flipped_goal : ungeared_goal;
+
+        apply_power_motor_reverse(reverse_power_motor, i);
+        double error = goal_after_check - current_position;
+        int proportional_voltage = int((127.0/45.0) * error);
+
+        angle_motor = proportional_voltage;
+    }
+}
+
+
+
+/* old code:
+} else if (abs(int(ungeared_goal - current_position)) > abs(int(ungeared_goal-360 - current_position))) {
+			goal_after_check = ungeared_goal-360;
+		}
+*/
 
 void opcontrol() {
 	angle_motors.tare_position();
