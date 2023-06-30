@@ -89,9 +89,9 @@ void rotate_modules(double goal) {
     for (size_t i = 0; i < angle_motors.size(); i++) { 
         pros::Motor& motor = angle_motors[i];
 		
-		double current_position = motor.get_position() * 5.5;
+		double current_position = motor.get_position()/5.5;
         double error = goal - current_position;
-        motor = int((127.0/(90*5.5)) * error);
+        motor = int((127.0/(45)) * error);
 		pros::lcd::print(2, "get pos: %f", motor.get_position());
 		pros::lcd::print(3, "adj pos: %f", current_position);
 		pros::lcd::print(4, "goal: %f", goal);
@@ -118,7 +118,7 @@ void opcontrol() {
 
 		if (abs(int(translate_magnitude)) > 10){
 			if ((left_y != 0) || (left_x != 0)){
-				translate_direction = ((180/M_PI)*atan2(left_y,left_x))+180;
+				translate_direction = ((180/M_PI)*atan2(left_y, left_x));//+180
 			}
 		}
 
@@ -131,7 +131,7 @@ void opcontrol() {
 		std::printf("translate Mag: %f", translate_magnitude);
 		std::printf("translate Dir: %f", translate_direction);
 		primary_motors.move_velocity(translate_magnitude);
-		rotate_modules(translate_direction*5.5);
+		rotate_modules(translate_direction);
 		
 		pros::delay(20);
 	}
