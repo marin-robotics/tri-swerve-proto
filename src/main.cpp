@@ -1,17 +1,23 @@
 #include "main.h"
+#include "pros/motors.hpp"
 #include <cmath>
+#include <vector>
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
-pros::Motor left_primary(11, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_primary(4, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor left_primary(17, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_primary(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::Motor left_angle(3, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor right_angle(10,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor left_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_angle(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
+
+// Adjustable constants
+int primaries_rpm = 600;
+
 
 /**
  * A callback function for LLEMU's center button.
@@ -82,8 +88,8 @@ int sgn(double v) {
   return (v > 0) - (v < 0);
 }
 
-// normalize manipulated angles into the range of 0-360 degrees
-double normalize_angle_360(double angle){
+// Normalize manipulated angles into the range of 0-360 degrees
+double normalize_angle(double angle){
 	return fmod(angle + 360, 360);
 }
 
@@ -97,7 +103,7 @@ void apply_power_motor_reverse(bool value, int index){
 	power_motor.set_reversed(value);
 }
 
-void rotate_modules(double ungeared_goal) {
+void rotate_modules(double theta) {
     for (size_t i = 0; i < angle_motors.size(); i++) { 
         pros::Motor& angle_motor = angle_motors[i]; 
 		// Motor& lets us directly modify the actual motor's variables
@@ -107,16 +113,16 @@ void rotate_modules(double ungeared_goal) {
 		bool reverse_power_motor = power_motor_reverse_status[i];
 
 		// compare the two different goals & pick which is closer to position
-		double flipped_goal = normalize_angle_360(ungeared_goal + 180);
+		double flipped_goal = normalize_angle(theta + 180);
 		double goal_after_check;
 
 		// if our original goal is farther way from current position than the flipped goal, pick the flipped goal
-		if (abs(int(ungeared_goal - current_position)) > abs(int(flipped_goal - current_position))) {
+		if (abs(int(theta - current_position)) > abs(int(flipped_goal - current_position))) {
 			goal_after_check = flipped_goal;
 			reverse_power_motor = true;
 		}
 		else { // otherwise, just use the original goal
-			goal_after_check = ungeared_goal;
+			goal_after_check = theta;
 			reverse_power_motor = false;
 		}
 
@@ -132,36 +138,43 @@ void rotate_modules(double ungeared_goal) {
 	}
 }
 
-void rotate_modules_gpt(double ungeared_goal) {
-    for (size_t i = 0; i < angle_motors.size(); i++) { 
-        pros::Motor& angle_motor = angle_motors[i];
-        
-        double current_position = angle_motor.get_position()/5.5;
-        bool reverse_power_motor = power_motor_reverse_status[i];
-        double flipped_goal = normalize_angle_360(ungeared_goal + 180);
-        double goal_after_check;
+std::vector<std::vector<double>> scale_vectors(std::vector<std::vector<double>> vectors){
+	double max_magnitude = 0;
+	for (int i = 0; i < 2; i++){
+		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
+	}
+	for (int i = 0; i < 2; i++){
+		vectors[i][0] /= max_magnitude;
+	}
 
-        // The following two if-else blocks are merged into one more readable statement
-        reverse_power_motor = abs(int(ungeared_goal - current_position)) > 
-            abs(int(flipped_goal - current_position));
-        
-        goal_after_check = reverse_power_motor ? flipped_goal : ungeared_goal;
-
-        apply_power_motor_reverse(reverse_power_motor, i);
-        double error = goal_after_check - current_position;
-        int proportional_voltage = int((127.0/45.0) * error);
-
-        angle_motor = proportional_voltage;
-    }
+	return vectors;
 }
 
+void update_module(std::vector<std::vector<double>> vectors) { // Theta from 0 to 360, magnitude from 0 to 1, motor_num 0 to 2
+	for (int i = 0; i < 2; i++){
+		pros::Motor& angle_motor = angle_motors[i];
+		pros::Motor& primary_motor = primary_motors[i];
+		double theta = vectors[i][1];
+		
+		double current_position = angle_motor.get_position()/5.5;
+		bool reverse_power_motor = power_motor_reverse_status[i];
+		double flipped_goal = normalize_angle(theta + 180);
+		double goal_after_check;
 
+		// Decide whether to reverse direction (if more efficient)
+		reverse_power_motor = abs(int(theta - current_position)) > 
+			abs(int(flipped_goal - current_position));
+		
+		goal_after_check = reverse_power_motor ? flipped_goal : theta;
 
-/* old code:
-} else if (abs(int(ungeared_goal - current_position)) > abs(int(ungeared_goal-360 - current_position))) {
-			goal_after_check = ungeared_goal-360;
-		}
-*/
+		apply_power_motor_reverse(reverse_power_motor, i);
+		double error = goal_after_check - current_position;
+		// Change angle at a proportional speed
+		angle_motor = int((127.0/45.0) * error);
+		
+		primary_motor.move_velocity(vectors[i][0]*primaries_rpm);
+	}
+}
 
 void opcontrol() {
 	angle_motors.tare_position();
@@ -174,30 +187,33 @@ void opcontrol() {
 	double translate_direction;
 	double PI = 3.141592;
 
+	std::vector<double> default_angles = {90, 215, 180};
 
 	while (true) {
 		// get stick inputs
-		float left_y = float(controller.get_analog(ANALOG_LEFT_Y));
-		float left_x = float(controller.get_analog(ANALOG_LEFT_X));
+		float left_y = float(controller.get_analog(ANALOG_LEFT_Y)) / 127;
+		float left_x = float(controller.get_analog(ANALOG_LEFT_X)) / 127;
+		float right_x = float(controller.get_analog(ANALOG_RIGHT_X)) / 127;
 
-		// polar coordinates! pyth theorem to get magnitude from (x,y)
-		translate_magnitude = sqrt(pow(left_x,2)+pow(left_y,2));
-		
-		// deadzone (magnitude < 10, do not rotate)
-		if (abs(int(translate_magnitude)) > 10){
-			if ((left_y != 0) || (left_x != 0)){
-				// get theta from arctan2 function using rect coords
-				// then convert radian result to degrees
-				// and translate the result by ? degrees to make the front of the bot 0
-				translate_direction = ((180/PI)*atan2(left_y,left_x))-90;
-				translate_direction = normalize_angle_360(translate_direction);
-			}
-			// else: do not update direction
+		std::vector<std::vector<double>> module_vectors = {{0},{0},{0}}; 
+		for (int i = 0; i < 2; i++) {
+			// Get yaw vector for each module in polar coordinates
+			// Convert vector to rectangular
+			double yaw_x = right_x*cos(default_angles[i]);
+			double yaw_y = right_x*sin(default_angles[i]);
+			std::vector<double> yaw_vector = {yaw_x, yaw_y};
+
+			// Add the vector with the translational vector
+			std::vector<double> rect_vector = {yaw_vector[0]+left_x, yaw_vector[1]+left_y};
+
+			// Convert back to polar
+			double magnitude = sqrt(pow(rect_vector[0],2)+pow(rect_vector[1],2));
+			double theta = normalize_angle(((180/PI)*(atan2(rect_vector[1],rect_vector[0])))-90);
+			std::vector<double> polar_vector = {magnitude, theta};
+			module_vectors.at(i) = polar_vector;
 		}
-
-		// apply values to motors
-		rotate_modules(translate_direction); // physical gear ratio of 5.5:1
-		primary_motors.move_velocity(translate_magnitude);
+		// Pass them to the scaling function
+		update_module(scale_vectors(module_vectors));
 
 		// print values to brain
 		pros::lcd::print(1, "(M space) translate dir: %f", translate_direction);
