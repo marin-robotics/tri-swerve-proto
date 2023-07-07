@@ -5,19 +5,18 @@
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 pros::Motor left_primary(17, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_primary(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor right_primary(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_primary(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor left_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_angle(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor right_angle(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_angle(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
 
 // Adjustable constants
 int primaries_rpm = 600;
-
 
 /**
  * A callback function for LLEMU's center button.
@@ -103,7 +102,7 @@ void apply_power_motor_reverse(bool value, int index){
 	power_motor.set_reversed(value);
 }
 
-void rotate_modules(double theta) {
+void rotate_modules(double theta) { // Unused function
     for (size_t i = 0; i < angle_motors.size(); i++) { 
         pros::Motor& angle_motor = angle_motors[i]; 
 		// Motor& lets us directly modify the actual motor's variables
@@ -140,10 +139,10 @@ void rotate_modules(double theta) {
 
 std::vector<std::vector<double>> scale_vectors(std::vector<std::vector<double>> vectors){
 	double max_magnitude = 0;
-	for (int i = 0; i < 2; i++){
+	for (int i = 0; i < 3; i++){
 		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
 	}
-	for (int i = 0; i < 2; i++){
+	for (int i = 0; i < 3; i++){
 		vectors[i][0] /= max_magnitude;
 	}
 
@@ -151,7 +150,7 @@ std::vector<std::vector<double>> scale_vectors(std::vector<std::vector<double>> 
 }
 
 void update_module(std::vector<std::vector<double>> vectors) { // Theta from 0 to 360, magnitude from 0 to 1, motor_num 0 to 2
-	for (int i = 0; i < 2; i++){
+	for (int i = 0; i < 3; i++){
 		pros::Motor& angle_motor = angle_motors[i];
 		pros::Motor& primary_motor = primary_motors[i];
 		double theta = vectors[i][1];
@@ -187,7 +186,7 @@ void opcontrol() {
 	double translate_direction;
 	double PI = 3.141592;
 
-	std::vector<double> default_angles = {90, 215, 180};
+	std::vector<double> default_angles = {30, 270, 150};
 
 	while (true) {
 		// get stick inputs
@@ -196,7 +195,7 @@ void opcontrol() {
 		float right_x = float(controller.get_analog(ANALOG_RIGHT_X)) / 127;
 
 		std::vector<std::vector<double>> module_vectors = {{0},{0},{0}}; 
-		for (int i = 0; i < 2; i++) {
+		for (int i = 0; i < 3; i++) {
 			// Get yaw vector for each module in polar coordinates
 			// Convert vector to rectangular
 			double yaw_x = right_x*cos(default_angles[i]);
