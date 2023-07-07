@@ -85,7 +85,7 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-int sgn(double v) {
+int sgn(double v) { // returns the sign of the argument as -1, 0, or 1
   return (v > 0) - (v < 0);
 }
 
@@ -102,41 +102,6 @@ void apply_power_motor_reverse(bool value, int index){
 
 	pros::Motor& power_motor = primary_motors[index];
 	power_motor.set_reversed(value);
-}
-
-void rotate_modules(double theta) { // Unused function
-    for (size_t i = 0; i < angle_motors.size(); i++) { 
-        pros::Motor& angle_motor = angle_motors[i]; 
-		// Motor& lets us directly modify the actual motor's variables
-
-		// CALCULATE CLOSEST ROTATION GOAL
-		double current_position = angle_motor.get_position()/5.5;
-		bool reverse_power_motor = power_motor_reverse_status[i];
-
-		// compare the two different goals & pick which is closer to position
-		double flipped_goal = normalize_angle(theta + 180);
-		double goal_after_check;
-
-		// if our original goal is farther way from current position than the flipped goal, pick the flipped goal
-		if (abs(int(theta - current_position)) > abs(int(flipped_goal - current_position))) {
-			goal_after_check = flipped_goal;
-			reverse_power_motor = true;
-		}
-		else { // otherwise, just use the original goal
-			goal_after_check = theta;
-			reverse_power_motor = false;
-		}
-
-		// apply reverse status to array & motor for later reference
-		apply_power_motor_reverse(reverse_power_motor, i);
-
-
-		// ROTATE MODULES (5.5:1 physical gear ratio)
-		double error = goal_after_check - current_position;
-		int proportional_voltage = int((127.0/45.0) * error);
-
-		angle_motor = proportional_voltage;
-	}
 }
 
 void reset_modules(){
