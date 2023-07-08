@@ -36,6 +36,8 @@ void initialize() {
 	pros::lcd::initialize();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+	angle_motors.tare_position();
+	angle_motors.set_zero_position(270*5.5); // Reset coordinate frame
 
 }
 
@@ -137,6 +139,12 @@ void rotate_modules(double theta) { // Unused function
 	}
 }
 
+void reset_modules(){
+	for (int i = 0; i < 3; i++){
+		angle_motors[i].move_absolute((90*5.5), 200);
+	}
+}
+
 std::vector<std::vector<double>> scale_vectors(std::vector<std::vector<double>> vectors){
 	double max_magnitude = 0;
 	for (int i = 0; i < 3; i++){
@@ -168,15 +176,14 @@ void update_module(std::vector<std::vector<double>> vectors) { // Theta from 0 t
 
 		apply_power_motor_reverse(reverse_power_motor, i);
 		double error = goal_after_check - current_position;
-		// Change angle at a proportional speed
-		angle_motor = int((127.0/45.0) * error);
-		
+
+		// Change angle at a proportional speed with deadzone based on magnitude
+		if (vectors[i][0] >= 0.01) {angle_motor = int((127.0/45.0) * error);} else {angle_motor = 0;}
+		// Change primary velocities
 		primary_motor.move_velocity(vectors[i][0]*primaries_rpm);
 	}
 }
-
 void opcontrol() {
-	angle_motors.tare_position();
 
 	// POWER MOTORS
 	double translate_magnitude;
@@ -185,19 +192,28 @@ void opcontrol() {
 	// ANGLE MOTORS
 	double translate_direction;
 	double PI = 3.141592;
+	double n;
 
-	std::vector<double> default_angles = {30, 270, 150};
+	std::vector<std::vector<double>> module_vectors = {{0},{0},{0}}; 
 
-	while (true) {
-		// get stick inputs
+	bool running = true;
+	while (running) {
+		std::vector<double> default_angles = {300+n, 180+n, 60+n};
+		double n = double(controller.get_analog(ANALOG_RIGHT_Y))/127 * 180;
+		pros::lcd::print(3, "Left: %f", 300+n);
+		pros::lcd::print(4, "Center: %f", 180+n);
+		pros::lcd::print(5, "Right: %f", 60+n);
+		// Get normalized stick inputs
 		float left_y = float(controller.get_analog(ANALOG_LEFT_Y)) / 127;
 		float left_x = float(controller.get_analog(ANALOG_LEFT_X)) / 127;
 		float right_x = float(controller.get_analog(ANALOG_RIGHT_X)) / 127;
 
-		std::vector<std::vector<double>> module_vectors = {{0},{0},{0}}; 
+		// print values to brain
+		pros::lcd::print(1, "Joystick (translate) Direction: %f", normalize_angle((180/PI)*atan2(left_y, left_x)));
+
 		for (int i = 0; i < 3; i++) {
-			// Get yaw vector for each module in polar coordinates
-			// Convert vector to rectangular
+			// Get yaw vector for each module in polar coordinates,
+			// then convert vector to rectangular
 			double yaw_x = right_x*cos(default_angles[i]);
 			double yaw_y = right_x*sin(default_angles[i]);
 			std::vector<double> yaw_vector = {yaw_x, yaw_y};
@@ -206,18 +222,21 @@ void opcontrol() {
 			std::vector<double> rect_vector = {yaw_vector[0]+left_x, yaw_vector[1]+left_y};
 
 			// Convert back to polar
-			double magnitude = sqrt(pow(rect_vector[0],2)+pow(rect_vector[1],2));
-			double theta = normalize_angle(((180/PI)*(atan2(rect_vector[1],rect_vector[0])))-90);
+			double magnitude = std::hypot(rect_vector[0], rect_vector[1]);
+			double theta = normalize_angle(((180/PI)*(atan2(rect_vector[1], rect_vector[0]))));
 			std::vector<double> polar_vector = {magnitude, theta};
 			module_vectors.at(i) = polar_vector;
 		}
 		// Pass them to the scaling function
 		update_module(scale_vectors(module_vectors));
 
-		// print values to brain
-		pros::lcd::print(1, "(M space) translate dir: %f", translate_direction);
-		pros::lcd::print(2, "(G space) translate dir: %f", translate_direction*5.5);
-
-		pros::delay(20);
+		pros::lcd::print(2, "Final Direction: %f", module_vectors[0][1]);
+		
+		if (controller.get_digital_new_press(DIGITAL_B)){
+			reset_modules();
+			running = false;
+		}
+		
+		pros::delay(15);
 	}
 }
