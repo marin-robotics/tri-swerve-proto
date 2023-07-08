@@ -2,6 +2,8 @@
 #include "pros/motors.hpp"
 #include <cmath>
 #include <vector>
+double PI = 3.141592653;
+using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 pros::Motor left_primary(17, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
@@ -11,6 +13,8 @@ pros::Motor right_primary(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCO
 pros::Motor left_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor center_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_angle(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+
+int swerve_size = 3;
 
 pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
@@ -95,51 +99,49 @@ double normalize_angle(double angle){
 }
 
 // store reverse status of every power motor
-bool power_motor_reverse_status[] = {false, false, false};
+bool power_motor_reverse_status[] = {false, false, false}; // redundant
 
-void apply_power_motor_reverse(bool value, int index){
-	power_motor_reverse_status[index] = value;
+// void apply_power_motor_reverse(bool value, int index){
+// 	power_motor_reverse_status[index] = value; // redundant
 
-	pros::Motor& power_motor = primary_motors[index];
-	power_motor.set_reversed(value);
-}
+// 	pros::Motor& power_motor = primary_motors[index];
+// 	power_motor.set_reversed(value);
+// }
 
 void reset_modules(){
-	for (int i = 0; i < 3; i++){
+	for (int i = 0; i < swerve_size; i++){
 		angle_motors[i].move_absolute((90*5.5), 200);
 	}
 }
 
-std::vector<std::vector<double>> scale_vectors(std::vector<std::vector<double>> vectors){
+vector<vector<double>> scale_vectors(vector<vector<double>> vectors){
 	double max_magnitude = 0;
-	for (int i = 0; i < 3; i++){
+	for (int i = 0; i < swerve_size; i++){
 		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
 	}
-	for (int i = 0; i < 3; i++){
+	for (int i = 0; i < swerve_size; i++){
 		vectors[i][0] /= max_magnitude;
 	}
 
 	return vectors;
 }
 
-void update_module(std::vector<std::vector<double>> vectors) { // Theta from 0 to 360, magnitude from 0 to 1, motor_num 0 to 2
-	for (int i = 0; i < 3; i++){
+void update_module(vector<vector<double>> vectors) { // Theta from 0 to 360, magnitude from 0 to 1, motor_num 0 to 2
+	for (int i = 0; i < swerve_size; i++){
 		pros::Motor& angle_motor = angle_motors[i];
 		pros::Motor& primary_motor = primary_motors[i];
 		double theta = vectors[i][1];
 		
 		double current_position = angle_motor.get_position()/5.5;
-		bool reverse_power_motor = power_motor_reverse_status[i];
+		bool reverse_power_motor = power_motor_reverse_status[i]; // redundant
 		double flipped_goal = normalize_angle(theta + 180);
 		double goal_after_check;
 
 		// Decide whether to reverse direction (if more efficient)
-		reverse_power_motor = abs(int(theta - current_position)) > 
-			abs(int(flipped_goal - current_position));
+		reverse_power_motor = abs(int(theta - current_position)) > abs(int(flipped_goal - current_position));
 		
 		goal_after_check = reverse_power_motor ? flipped_goal : theta;
-
-		apply_power_motor_reverse(reverse_power_motor, i);
+		primary_motors[i].set_reversed(reverse_power_motor);
 		double error = goal_after_check - current_position;
 
 		// Change angle at a proportional speed with deadzone based on magnitude
@@ -148,6 +150,7 @@ void update_module(std::vector<std::vector<double>> vectors) { // Theta from 0 t
 		primary_motor.move_velocity(vectors[i][0]*primaries_rpm);
 	}
 }
+
 void opcontrol() {
 
 	// POWER MOTORS
@@ -156,18 +159,19 @@ void opcontrol() {
 
 	// ANGLE MOTORS
 	double translate_direction;
-	double PI = 3.141592;
 	double n;
 
-	std::vector<std::vector<double>> module_vectors = {{0},{0},{0}}; 
+	vector<vector<double>> module_vectors(swerve_size, vector<double> {0}); // create a 
 
 	bool running = true;
 	while (running) {
-		std::vector<double> default_angles = {300+n, 180+n, 60+n};
+		
 		double n = double(controller.get_analog(ANALOG_RIGHT_Y))/127 * 180;
+		vector<double> default_angles = {120+n, 0+n, 240+n};
 		pros::lcd::print(3, "Left: %f", 300+n);
 		pros::lcd::print(4, "Center: %f", 180+n);
 		pros::lcd::print(5, "Right: %f", 60+n);
+
 		// Get normalized stick inputs
 		float left_y = float(controller.get_analog(ANALOG_LEFT_Y)) / 127;
 		float left_x = float(controller.get_analog(ANALOG_LEFT_X)) / 127;
@@ -176,20 +180,20 @@ void opcontrol() {
 		// print values to brain
 		pros::lcd::print(1, "Joystick (translate) Direction: %f", normalize_angle((180/PI)*atan2(left_y, left_x)));
 
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < swerve_size; i++) {
 			// Get yaw vector for each module in polar coordinates,
 			// then convert vector to rectangular
 			double yaw_x = right_x*cos(default_angles[i]);
 			double yaw_y = right_x*sin(default_angles[i]);
-			std::vector<double> yaw_vector = {yaw_x, yaw_y};
+			vector<double> yaw_vector = {yaw_x, yaw_y};
 
 			// Add the vector with the translational vector
-			std::vector<double> rect_vector = {yaw_vector[0]+left_x, yaw_vector[1]+left_y};
+			vector<double> rect_vector = {yaw_vector[0]+left_x, yaw_vector[1]+left_y};
 
 			// Convert back to polar
-			double magnitude = std::hypot(rect_vector[0], rect_vector[1]);
+			double magnitude = hypot(rect_vector[0], rect_vector[1]);
 			double theta = normalize_angle(((180/PI)*(atan2(rect_vector[1], rect_vector[0]))));
-			std::vector<double> polar_vector = {magnitude, theta};
+			vector<double> polar_vector = {magnitude, theta};
 			module_vectors.at(i) = polar_vector;
 		}
 		// Pass them to the scaling function
