@@ -6,12 +6,16 @@
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
+
+pros::GPS gps(3);
+pros::c::gps_status_s_t gps_status;
+
 pros::Motor left_primary(17, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_primary(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(10, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_primary(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor left_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_angle(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
@@ -43,6 +47,8 @@ void initialize() {
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*5.5); // Reset coordinate frame
+
+	gps.set_rotation(0);
 
 }
 
@@ -90,9 +96,12 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-int sgn(double v) { // returns the sign of the argument as -1, 0, or 1
+
+// returns the sign of the argument as -1, 0, or 1
+int sgn(double v) { 
   return (v > 0) - (v < 0);
 }
+
 double pow_with_sign(double x) {
   if (x < 0) {
     return -x * x;
@@ -105,16 +114,6 @@ double pow_with_sign(double x) {
 double normalize_angle(double angle){
 	return fmod(angle + 360, 360);
 }
-
-// store reverse status of every power motor
-//bool power_motor_reverse_status[] = {false, false, false}; // redundant
-
-// void apply_power_motor_reverse(bool value, int index){
-// 	power_motor_reverse_status[index] = value; // redundant
-
-// 	pros::Motor& power_motor = primary_motors[index];
-// 	power_motor.set_reversed(value);
-// }
 
 void reset_modules(){
 	for (int i = 0; i < swerve_size; i++){
@@ -132,16 +131,23 @@ double true_error(double degree_1, double degree_2) {
     }
 }
 
-vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_magnitude, int right_x){
+vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_magnitude, double right_x){
 	double max_magnitude = 0;
 	if (raw_magnitude > 1) {raw_magnitude = 1;}
+	right_x = abs(right_x);
+	if (right_x > 1) {right_x = 1;}
+
+	// Get maximum magnitude of the vectors
 	for (int i = 0; i < swerve_size; i++){
 		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
 	}
+	// Scale vectors accordingly
 	for (int i = 0; i < swerve_size; i++){
 		vectors[i][0] /= max_magnitude; // Normalize
-		vectors[i][0] *= max(raw_magnitude, abs(double(right_x)/127)); // Slow down
-		pros::lcd::print(7, "raw_mag: %f", raw_magnitude);
+		vectors[i][0] *= max(raw_magnitude, right_x); // Slow down
+		// pros::lcd::print(1, "raw_mag: %f", raw_magnitude);
+		// pros::lcd::print(2, "right_x: %f", right_x);
+
 	}
 	return vectors;
 }
@@ -154,12 +160,10 @@ void update_module(vector<vector<double>> vectors) { // Theta from 0 to 360, mag
 		
 		double current_position = normalize_angle(angle_motor.get_position()/5.5);
 		
-		// Bool reverse_power_motor = power_motor_reverse_status[i]; // redundant
-		   
 		// Decide whether to reverse direction (if more efficient)
 		double flipped_goal = normalize_angle(theta + 180);
 		// Check this next
-		if (abs(int(theta - current_position)) > abs(int(flipped_goal - current_position))) {
+		if (abs(true_error(theta, current_position)) > abs(true_error(flipped_goal, current_position))) {
 			theta = flipped_goal;
 			primary_motor.set_reversed(true);
 		} else {
@@ -191,24 +195,14 @@ void opcontrol() {
 	bool running = true;
 	while (running) {
 		
-		if (controller.get_digital_new_press(DIGITAL_A)){
-			n++;
-		} else if (controller.get_digital_new_press(DIGITAL_X)){
-			n--;
-		}
-		// pros::lcd::print(2, "N: %d", n);
-		// vector<double> default_angles = {120+n, 0+n, 240+n};
-		// pros::lcd::print(3, "Left: %f", 120+n);
-		// pros::lcd::print(4, "Center: %f", 0+n);
-		// pros::lcd::print(5, "Right: %f", 240+n);
-
 		// Get normalized stick inputs and scale by square
 		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
-		// print values to brain
-		//pros::lcd::print(1, "Joystick (translate) Direction: %f", normalize_angle((180/PI)*atan2(left_y, left_x)));
+		// GPS Readings
+		gps_status = gps.get_status();
+		pros::lcd::print(0, "YAW: %f", gps_status.yaw);
 
 		for (int i = 0; i < swerve_size; i++){
 			// Get yaw vector for each module in polar coordinates,
