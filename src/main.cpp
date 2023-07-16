@@ -173,7 +173,7 @@ void update_module(vector<vector<double>> vectors) { // Theta from 0 to 360, mag
 		double error = true_error(theta, current_position);
 		   
 		// Change angle at a proportional speed with deadzone based on magnitude
-		if (vectors[i][0] > 0.00) {angle_motor = int((127.0/45.0) * error);} else {angle_motor = 0;}
+		if (vectors[i][0] > 0.00) {angle_motor = int((127.0/7.0) * error);} else {angle_motor = 0;}
 		// Change primary velocities
 		primary_motor.move_velocity(int(vectors[i][0]*primaries_rpm));
 	}
@@ -203,6 +203,13 @@ void opcontrol() {
 		// GPS Readings
 		gps_status = gps.get_status();
 		pros::lcd::print(0, "YAW: %f", gps_status.yaw);
+		double yaw = normalize_angle(gps_status.yaw); 
+		
+		// Adjusting Translate Vector for field based control
+		vector<double> left_stick_polar = {hypot(left_y,left_x),normalize_angle((180/PI)*atan2(left_y, left_x)+yaw)}; // r, Θ
+		double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]);
+		double left_rect_y = left_stick_polar[0]*sin((PI/180)*left_stick_polar[1]);
+		vector<double> left_stick_rect = {left_rect_x, left_rect_y};
 
 		for (int i = 0; i < swerve_size; i++){
 			// Get yaw vector for each module in polar coordinates,
@@ -212,7 +219,7 @@ void opcontrol() {
 			vector<double> yaw_vector = {yaw_x, yaw_y};
 
 			// Add the vector with the translational vector
-			vector<double> rect_vector = {yaw_vector[0]+left_x, yaw_vector[1]+left_y};
+			vector<double> rect_vector = {yaw_vector[0]+left_rect_x, yaw_vector[1]+left_rect_y};
 
 			// Convert back to polar
 			double magnitude = hypot(rect_vector[0], rect_vector[1]);
