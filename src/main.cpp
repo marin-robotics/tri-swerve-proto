@@ -97,33 +97,56 @@ void autonomous() {}
  * task, not resume it from where it left off.
  */
 
-// returns the sign of the argument as -1, 0, or 1
-int sgn(double v) { 
-  return (v > 0) - (v < 0);
+// Utilities
+int sgn(double value) {
+	/**
+	 * Returns the sign of the argument 
+	 * as -1 for negative, 1 for positive,
+	 * or 0 for a value neither - nor +
+	*/
+	return (value > 0) - (value < 0);
 }
 
 double pow_with_sign(double x) {
-  if (x < 0) {
-    return -x * x;
-  } else {
-    return x * x;
-  }
+	/**
+	 * Squares the given value, 
+	 * accounting for it's sign.
+	*/
+	if (x < 0) {
+	return -x * x;
+	} else {
+	return x * x;
+	}
 }
 
-// Normalize manipulated angles into the range of 0-360 degrees
 double normalize_angle(double angle){
+	/**
+	 * Normalizes the given angle into 
+	 * the range of 0-360 degrees.
+	*/
 	return fmod(angle + 360, 360);
 }
 
-void reset_modules(){
+void reset_modules(){ 
+	/**
+	 * Resets modules to absolute zero to untangle wires at the end of a match.
+	*/
 	for (int i = 0; i < swerve_size; i++){
 		angle_motors[i].move_absolute((90*5.5), 200);
 	}
 }
 
 double true_error(double degree_1, double degree_2) {
-    double counter_clockwise_error = fmod((degree_2 - degree_1 + 360), 360);
-    double clockwise_error = fmod((degree_1 - degree_2 + 360), 360);
+	/**
+	 * Calculates the real difference between two degrees
+	 * and returns the smaller error value. Accounts for both
+	 * clockwise and counter-clockwise rotation.
+	*/
+
+    double counter_clockwise_error = normalize_angle(degree_2 - degree_1);
+    double clockwise_error = normalize_angle(degree_1 - degree_2);
+	
+	// return the smaller error
     if (counter_clockwise_error <= clockwise_error) {
         return -counter_clockwise_error;
     } else {
@@ -131,13 +154,51 @@ double true_error(double degree_1, double degree_2) {
     }
 }
 
+// Vector Utils
+vector<double> create_yaw_vector(double x, double yaw_angle){
+	/**
+	 * Does exactly what you think it does.
+	*/
+
+	// Get yaw vector for each module in polar coordinates,
+	// then convert to rectangular (always remember to pass radians in for theta!)
+	double yaw_x = x*cos((PI/180)*yaw_angle);
+	double yaw_y = x*sin((PI/180)*yaw_angle);
+	vector<double> yaw_vector = {yaw_x, yaw_y};
+	return yaw_vector;
+}
+
+vector<double> create_translate_vector(double x, double y){
+	/**
+	 * Does exactly what you think it does.
+	*/
+
+	// get translate vector in polar coordinates
+	double r = hypot(x,y);
+	double theta = normalize_angle((180/PI)*atan2(y, x));
+	vector<double> left_stick_polar = {r, theta};
+
+	// convert to rectangular coordinates (making sure to convert theta back to radians)
+	double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]); // r*cos(theta (in rads)) for x
+	double left_rect_y = left_stick_polar[0]*sin((PI/180)*left_stick_polar[1]); // r*sin(theta (in rads)) for y
+
+	vector<double> left_stick_rect = {left_rect_x, left_rect_y};
+
+	return left_stick_rect;
+}
+
 vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_magnitude, double right_x){
-	double max_magnitude = 0;
+	/**
+	 * Normalize the magnitude of the given vectors by dividing every magnitude value of each array by the largest
+	 * magnitude, such that the maximum magnitude is 1 and all other magnitude values of scaled by the same factor. 
+	*/
+
 	if (raw_magnitude > 1) {raw_magnitude = 1;}
 	right_x = abs(right_x);
 	if (right_x > 1) {right_x = 1;}
 
 	// Get maximum magnitude of the vectors
+	double max_magnitude = 0;
 	for (int i = 0; i < swerve_size; i++){
 		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
 	}
@@ -145,96 +206,91 @@ vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_
 	for (int i = 0; i < swerve_size; i++){
 		vectors[i][0] /= max_magnitude; // Normalize
 		vectors[i][0] *= max(raw_magnitude, right_x); // Slow down
-		// pros::lcd::print(1, "raw_mag: %f", raw_magnitude);
-		// pros::lcd::print(2, "right_x: %f", right_x);
-
 	}
 	return vectors;
 }
 
-void update_module(vector<vector<double>> vectors) { // Theta from 0 to 360, magnitude from 0 to 1, motor_num 0 to 2
+
+// Applying Vectors
+void update_modules(vector<vector<double>> vectors) {
+	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
 		pros::Motor& angle_motor = angle_motors[i];
 		pros::Motor& primary_motor = primary_motors[i];
-		double theta = normalize_angle(vectors[i][1]);
+
+		double target_theta = normalize_angle(vectors[i][1]);
+		double current_position = normalize_angle(angle_motor.get_position()/5.5); // div by 5.5 to account for gearing
 		
-		double current_position = normalize_angle(angle_motor.get_position()/5.5);
-		
-		// Decide whether to reverse direction (if more efficient)
-		double flipped_goal = normalize_angle(theta + 180);
-		// Check this next
-		if (abs(true_error(theta, current_position)) > abs(true_error(flipped_goal, current_position))) {
-			theta = flipped_goal;
+		// closer to flipped goal?
+		double flipped_goal = normalize_angle(target_theta + 180);
+		if (abs(true_error(target_theta, current_position)) 
+			> abs(true_error(flipped_goal, current_position))) { // yes!
+			target_theta = flipped_goal;
 			primary_motor.set_reversed(true);
-		} else {
+		} else { // nope
 			primary_motor.set_reversed(false);
 		}
-		// Calculate true error
-		double error = true_error(theta, current_position);
+
+		// Calculate true error between our current position and the new target
+		double error = true_error(target_theta, current_position);
 		   
 		// Change angle at a proportional speed with deadzone based on magnitude
-		if (vectors[i][0] > 0.00) {angle_motor = int((127.0/7.0) * error);} else {angle_motor = 0;}
+		if (vectors[i][0] > 0.00) // mag > 0?
+		{
+			angle_motor = int((127.0/7.0) * error);
+		} else {
+			angle_motor = 0;
+		}
+
 		// Change primary velocities
 		primary_motor.move_velocity(int(vectors[i][0]*primaries_rpm));
 	}
 }
 
+
+// 
 void opcontrol() {
-
-	// POWER MOTORS
-	double translate_magnitude;
-	bool reverse_direction = false;
-
-	// ANGLE MOTORS
-	double translate_direction;
-	double n;
-
-	vector<vector<double>> module_vectors(swerve_size, vector<double> {0}); // create a 
+	// Vectors
+	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
+	vector<vector<double>> scaled_vectors;
 	vector<double> default_angles = {120, 0, 240};
+	vector<double> translate_vector;
+	vector<double> yaw_vector;
 	
+	// loop
 	bool running = true;
 	while (running) {
-		
+
 		// Get normalized stick inputs and scale by square
 		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
-		// GPS Readings
-		gps_status = gps.get_status();
-		pros::lcd::print(0, "YAW: %f", gps_status.yaw);
-		double yaw = normalize_angle(gps_status.yaw); 
-		
-		// Adjusting Translate Vector for field based control
-		vector<double> left_stick_polar = {hypot(left_y,left_x),normalize_angle((180/PI)*atan2(left_y, left_x)+yaw)}; // r, Θ
-		double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]);
-		double left_rect_y = left_stick_polar[0]*sin((PI/180)*left_stick_polar[1]);
-		vector<double> left_stick_rect = {left_rect_x, left_rect_y};
+		// create translate vector
+		translate_vector = create_translate_vector(left_x, left_y);
 
+		// Create all yaw vectors & sum them with translate vector to create summed module vectors
 		for (int i = 0; i < swerve_size; i++){
-			// Get yaw vector for each module in polar coordinates,
-			// then convert vector to rectangular
-			double yaw_x = right_x*cos((PI/180)*default_angles[i]);
-			double yaw_y = right_x*sin((PI/180)*default_angles[i]);
-			vector<double> yaw_vector = {yaw_x, yaw_y};
 
-			// Add the vector with the translational vector
-			vector<double> rect_vector = {yaw_vector[0]+left_rect_x, yaw_vector[1]+left_rect_y};
+			yaw_vector = create_yaw_vector(right_x, default_angles[i]);
 
-			// Convert back to polar
-			double magnitude = hypot(rect_vector[0], rect_vector[1]);
-			double theta = normalize_angle(((180/PI)*(atan2(rect_vector[1], rect_vector[0]))));
-			vector<double> polar_vector = {magnitude, theta};
-			module_vectors.at(i) = polar_vector;
+			vector<double> summed_vector = {yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]};
+
+			// Convert summed vector to polar
+			double magnitude = hypot(summed_vector[0], summed_vector[1]);
+			double theta = normalize_angle(((180/PI)*(atan2(summed_vector[1], summed_vector[0]))));
+			vector<double> summed_polar_vector = {magnitude, theta};
+
+			// store summed vector as the new target vector for the corresponding module
+			module_vectors.at(i) = summed_polar_vector;
 		}
-		// Pass them to the scaling function
-		vector<vector<double>> scaled_vector = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
-		update_module(scaled_vector);
-		for (int i = 0; i < swerve_size; i++){
-			// pros::lcd::print(i, "Θ, Mag.: %f, %f", module_vectors[i][1], module_vectors[i][0]);
-			// pros::lcd::print(i+3, "Θ, Mag.: %f, %f", scaled_vector[i][1], scaled_vector[i][0]);
-		}
+
+		// Post-normalize speed: scale vectors
+		scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
+		update_modules(scaled_vectors);
 		
+
+		// reset all module rotations to unwind cords at the end of matches
 		if (controller.get_digital_new_press(DIGITAL_B)){
 			reset_modules();
 			running = false;
