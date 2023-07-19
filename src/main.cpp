@@ -98,20 +98,20 @@ void autonomous() {}
  */
 
 // Utilities
+/**
+ * Returns the sign of the argument 
+ * as -1 for negative, 1 for positive,
+ * or 0 for a value neither - nor +
+*/
 int sgn(double value) {
-	/**
-	 * Returns the sign of the argument 
-	 * as -1 for negative, 1 for positive,
-	 * or 0 for a value neither - nor +
-	*/
 	return (value > 0) - (value < 0);
 }
 
+/**
+ * Squares the given value, 
+ * accounting for its sign.
+*/
 double pow_with_sign(double x) {
-	/**
-	 * Squares the given value, 
-	 * accounting for it's sign.
-	*/
 	if (x < 0) {
 	return -x * x;
 	} else {
@@ -119,30 +119,29 @@ double pow_with_sign(double x) {
 	}
 }
 
+/**
+ * Normalizes the given angle into 
+ * the range of 0-360 degrees.
+*/
 double normalize_angle(double angle){
-	/**
-	 * Normalizes the given angle into 
-	 * the range of 0-360 degrees.
-	*/
 	return fmod(angle + 360, 360);
 }
 
+/**
+ * Resets modules to absolute zero to untangle wires at the end of a match.
+*/
 void reset_modules(){ 
-	/**
-	 * Resets modules to absolute zero to untangle wires at the end of a match.
-	*/
 	for (int i = 0; i < swerve_size; i++){
 		angle_motors[i].move_absolute((90*5.5), 200);
 	}
 }
 
+/**
+ * Calculates the real difference between two degrees
+ * and returns the smaller error value. Accounts for both
+ * clockwise and counter-clockwise rotation.
+*/
 double true_error(double degree_1, double degree_2) {
-	/**
-	 * Calculates the real difference between two degrees
-	 * and returns the smaller error value. Accounts for both
-	 * clockwise and counter-clockwise rotation.
-	*/
-
     double counter_clockwise_error = normalize_angle(degree_2 - degree_1);
     double clockwise_error = normalize_angle(degree_1 - degree_2);
 	
@@ -155,11 +154,12 @@ double true_error(double degree_1, double degree_2) {
 }
 
 // Vector Utils
+/**
+ * Does exactly what you think it does.
+ * @param x The X value of the stick being used to control yaw.
+ * @param yaw_angle The default (optimal) yaw angle for the module.
+*/
 vector<double> create_yaw_vector(double x, double yaw_angle){
-	/**
-	 * Does exactly what you think it does.
-	*/
-
 	// Get yaw vector for each module in polar coordinates,
 	// then convert to rectangular (always remember to pass radians in for theta!)
 	double yaw_x = x*cos((PI/180)*yaw_angle);
@@ -168,11 +168,12 @@ vector<double> create_yaw_vector(double x, double yaw_angle){
 	return yaw_vector;
 }
 
+/**
+ * Does exactly what you think it does.
+ * @param x The X coordinate of the joystick being used to control translation.
+ * @param y The Y coordinate of the joystick being used to control translation.
+*/
 vector<double> create_translate_vector(double x, double y){
-	/**
-	 * Does exactly what you think it does.
-	*/
-
 	// get translate vector in polar coordinates
 	double r = hypot(x,y);
 	double theta = normalize_angle((180/PI)*atan2(y, x));
@@ -187,14 +188,23 @@ vector<double> create_translate_vector(double x, double y){
 	return left_stick_rect;
 }
 
+/**
+ * Normalize the magnitude of the given vectors by dividing 
+ * every magnitude value of each array by the largest
+ * magnitude, such that the maximum magnitude is 1 and all 
+ * other magnitude values are scaled by the same factor. 
+ * 
+ * @param vectors A vector holding each module's 
+ * 		individual calculated vectors.
+ * @param raw_magnitude Magnitude of the left stick's 
+ * 		coordinates, calculated directly from its x & y coordinates.
+ * @param right_x The X coordinate of the right joystick, 
+ * 		which is used for yaw calculations.
+*/
 vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_magnitude, double right_x){
-	/**
-	 * Normalize the magnitude of the given vectors by dividing every magnitude value of each array by the largest
-	 * magnitude, such that the maximum magnitude is 1 and all other magnitude values of scaled by the same factor. 
-	*/
-
+	// clamp both magnitudes to a max of 1
 	if (raw_magnitude > 1) {raw_magnitude = 1;}
-	right_x = abs(right_x);
+	right_x = abs(right_x); // right x is yaw magnitude
 	if (right_x > 1) {right_x = 1;}
 
 	// Get maximum magnitude of the vectors
@@ -205,13 +215,20 @@ vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_
 	// Scale vectors accordingly
 	for (int i = 0; i < swerve_size; i++){
 		vectors[i][0] /= max_magnitude; // Normalize
-		vectors[i][0] *= max(raw_magnitude, right_x); // Slow down
+		vectors[i][0] *= max(raw_magnitude, right_x); // multiply by the largest of the two magnitudes 
+														   // to avoid vectors with 0 magnitude
 	}
 	return vectors;
 }
 
 
 // Applying Vectors
+/**
+ * Updates each swerve module with the given vectors, 
+ * taken in polar coordinates.
+ * @param vectors A vector<vector<double>> that store the individual 
+ * 		calculated vectors of each swerve module, in the format (r, theta).
+*/
 void update_modules(vector<vector<double>> vectors) {
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
@@ -237,7 +254,7 @@ void update_modules(vector<vector<double>> vectors) {
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (vectors[i][0] > 0.00) // mag > 0?
 		{
-			angle_motor = int((127.0/7.0) * error);
+			angle_motor = int((127.0/7.0) * error); // divisor is the point where speed reaches max
 		} else {
 			angle_motor = 0;
 		}
