@@ -177,7 +177,7 @@ vector<double> create_translate_vector(double x, double y){
 	// get translate vector in polar coordinates
 	double r = hypot(x,y);
 	double theta = normalize_angle((180/PI)*atan2(y, x));
-	vector<double> left_stick_polar = {r, theta};
+	vector<double> left_stick_polar = {r, theta}; // + gps_state.yaw to offset for field orientation
 
 	// convert to rectangular coordinates (making sure to convert theta back to radians)
 	double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]); // r*cos(theta (in rads)) for x
@@ -236,7 +236,8 @@ void update_modules(vector<vector<double>> vectors) {
 		pros::Motor& primary_motor = primary_motors[i];
 
 		double target_theta = normalize_angle(vectors[i][1]);
-		double current_position = normalize_angle(angle_motor.get_position()/5.5); // div by 5.5 to account for gearing
+		double current_position = normalize_angle(angle_motor.get_position()/5.5); // div by 5.5 to account for 
+																						  // physical gear ratio
 		
 		// closer to flipped goal?
 		double flipped_goal = normalize_angle(target_theta + 180);
