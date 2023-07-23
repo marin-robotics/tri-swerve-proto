@@ -11,11 +11,11 @@ pros::GPS gps(3);
 pros::c::gps_status_s_t gps_status;
 
 pros::Motor left_primary(17, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_primary(10, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_primary(19,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor left_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_angle(9, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_angle(20,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
@@ -255,7 +255,7 @@ void update_modules(vector<vector<double>> vectors) {
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (vectors[i][0] > 0.00) // mag > 0?
 		{
-			angle_motor = int((127.0/7.0) * error); // divisor is the point where speed reaches max
+			angle_motor = int((127.0/45.0) * error); // divisor is the point where speed reaches max
 		} else {
 			angle_motor = 0;
 		}
