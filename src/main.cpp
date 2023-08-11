@@ -7,8 +7,8 @@ using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 
-// pros::GPS gps(3);
-// pros::c::gps_status_s_t gps_status;
+pros::GPS gps(8);
+pros::c::gps_status_s_t gps_status;
 
 pros::Motor front_left_primary(21, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor front_right_primary(12, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
@@ -28,6 +28,7 @@ double PI = 3.141592653;
 // Adjustable constants
 int swerve_size = 4;
 int primaries_rpm = 600;
+bool field_oriented = true;
 
 /**
  * A callback function for LLEMU's center button.
@@ -50,7 +51,7 @@ void initialize() {
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*5.5); // Reset coordinate frame
 
-	// gps.set_rotation(0);
+	gps.set_rotation(0);
 
 }
 
@@ -177,9 +178,13 @@ vector<double> create_yaw_vector(double x, double yaw_angle){
 */
 vector<double> create_translate_vector(double x, double y){
 	// get translate vector in polar coordinates
+	double theta;
 	double r = hypot(x,y);
-	double theta = normalize_angle((180/PI)*atan2(y, x));
-	vector<double> left_stick_polar = {r, theta}; // + gps_state.yaw to offset for field orientation
+
+	if (field_oriented){ theta = normalize_angle(((180/PI)*atan2(y, x))+gps_status.yaw); }
+	else{ theta = normalize_angle((180/PI)*atan2(y, x)); }
+
+	vector<double> left_stick_polar = {r, theta};
 
 	// convert to rectangular coordinates (making sure to convert theta back to radians)
 	double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]); // r*cos(theta (in rads)) for x
@@ -257,7 +262,7 @@ void update_modules(vector<vector<double>> vectors) {
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (vectors[i][0] > 0.00) // mag > 0?
 		{
-			angle_motor = int((127.0/45.0) * error); // divisor is the point where speed reaches max
+			angle_motor = int((127.0/30.0) * error); // divisor is the point where speed reaches max
 		} else {
 			angle_motor = 0;
 		}
@@ -280,6 +285,7 @@ void opcontrol() {
 	// loop
 	bool running = true;
 	while (running) {
+		gps_status = gps.get_status();
 
 		// Get normalized stick inputs and scale by square
 		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
@@ -309,6 +315,7 @@ void opcontrol() {
 		scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
 		update_modules(scaled_vectors);
 		
+		pros::lcd::print(1, "%f", gps_status.yaw);
 
 		// reset all module rotations to unwind cords at the end of matches
 		if (controller.get_digital_new_press(DIGITAL_B)){
