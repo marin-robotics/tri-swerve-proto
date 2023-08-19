@@ -23,12 +23,17 @@ pros::Motor back_right_angle(2,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_EN
 pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
 pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
 
-// Permanant constants
-double PI = 3.141592653;
-// Adjustable constants
+// Customizable parameters
 int swerve_size = 4;
 int primaries_rpm = 600;
 bool field_oriented = true;
+
+// Permanant constants
+double PI = 3.141592653;
+// Program variables
+double override_theta;
+double override_mag = primaries_rpm*0.6;
+bool strafe = false;
 
 /**
  * A callback function for LLEMU's center button.
@@ -162,13 +167,13 @@ double true_error(double degree_1, double degree_2) {
  * @param x The X value of the stick being used to control yaw.
  * @param yaw_angle The default (optimal) yaw angle for the module.
 */
-vector<double> create_yaw_vector(double x, double yaw_angle){
+vector<double> polar_to_rect(double mag, double theta){
 	// Get yaw vector for each module in polar coordinates,
 	// then convert to rectangular (always remember to pass radians in for theta!)
-	double yaw_x = x*cos((PI/180)*yaw_angle);
-	double yaw_y = x*sin((PI/180)*yaw_angle);
-	vector<double> yaw_vector = {yaw_x, yaw_y};
-	return yaw_vector;
+	double x = mag*cos((PI/180)*theta);
+	double y = mag*sin((PI/180)*theta);
+	vector<double> rect_vect = {x, y};
+	return rect_vect;
 }
 
 /**
@@ -178,13 +183,12 @@ vector<double> create_yaw_vector(double x, double yaw_angle){
 */
 vector<double> create_translate_vector(double x, double y){
 	// get translate vector in polar coordinates
-	double theta;
+	double theta = (180/PI)*atan2(y, x);
 	double r = hypot(x,y);
 
-	if (field_oriented){ theta = normalize_angle(((180/PI)*atan2(y, x))+gps_status.yaw); }
-	else{ theta = normalize_angle((180/PI)*atan2(y, x)); }
+	if (field_oriented){theta += gps_status.yaw;} 
 
-	vector<double> left_stick_polar = {r, theta};
+	vector<double> left_stick_polar = {r, normalize_angle(theta)};
 
 	// convert to rectangular coordinates (making sure to convert theta back to radians)
 	double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]); // r*cos(theta (in rads)) for x
@@ -262,7 +266,7 @@ void update_modules(vector<vector<double>> vectors) {
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (vectors[i][0] > 0.00) // mag > 0?
 		{
-			angle_motor = int((127.0/30.0) * error); // divisor is the point where speed reaches max
+			angle_motor = (127.0/30.0) * error; // divisor is the point where speed reaches max
 		} else {
 			angle_motor = 0;
 		}
@@ -276,49 +280,88 @@ void update_modules(vector<vector<double>> vectors) {
 // 
 void opcontrol() {
 	// Vectors
-	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
-	vector<vector<double>> scaled_vectors;
 	vector<double> default_angles = {45, 315, 135, 225}; //FL, FR, BL, BR 
+	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
 	vector<double> translate_vector;
 	vector<double> yaw_vector;
+	vector<double> summed_polar_vector;
+	vector<vector<double>> scaled_vectors;
 	
 	// loop
 	bool running = true;
 	while (running) {
 		gps_status = gps.get_status();
 
+		if (controller.get_digital_new_press(DIGITAL_L1)){
+			field_oriented = !field_oriented;
+		}
+
 		// Get normalized stick inputs and scale by square
 		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
+
+		// Strafing on button presses
+		if (controller.get_digital(DIGITAL_A)){
+			strafe = true;
+			override_theta = 0.0;
+		}
+		else if (controller.get_digital(DIGITAL_Y)){
+			strafe = true;
+			override_theta = 180.0;
+		}
+		else if (controller.get_digital(DIGITAL_X)){
+			strafe = true;
+			override_theta = 90.0;
+		}
+		else if (controller.get_digital(DIGITAL_B)){
+			strafe = true;
+			override_theta = 270.0;
+		} else {
+			strafe = false;
+		}
+		
+		pros::lcd::print(1, "Strafing? %d", strafe);
 
 		// create translate vector
 		translate_vector = create_translate_vector(left_x, left_y);
 
 		// Create all yaw vectors & sum them with translate vector to create summed module vectors
 		for (int i = 0; i < swerve_size; i++){
+			if (!strafe){
+				yaw_vector = polar_to_rect(right_x, default_angles[i]);
 
-			yaw_vector = create_yaw_vector(right_x, default_angles[i]);
+				vector<double> summed_vector = {yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]};
 
-			vector<double> summed_vector = {yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]};
-
-			// Convert summed vector to polar
-			double magnitude = hypot(summed_vector[0], summed_vector[1]);
-			double theta = normalize_angle(((180/PI)*(atan2(summed_vector[1], summed_vector[0]))));
-			vector<double> summed_polar_vector = {magnitude, theta};
-
+				// Convert summed vector to polar
+				double magnitude = hypot(summed_vector[0], summed_vector[1]);
+				double theta = normalize_angle(((180/PI)*(atan2(summed_vector[1], summed_vector[0]))));
+				summed_polar_vector = {magnitude, theta};
+			} else {
+				summed_polar_vector = {override_mag, override_theta};
+			}
 			// store summed vector as the new target vector for the corresponding module
 			module_vectors.at(i) = summed_polar_vector;
 		}
 
 		// Post-normalize speed: scale vectors
-		scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
-		update_modules(scaled_vectors);
+		
+
+		if (!strafe){
+			// continue with normal drive code
+			// Pass them to the scaling function
+			scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
+			update_modules(scaled_vectors);
+		}
+		else {
+			// if strafing, no need to scale
+			update_modules(module_vectors);
+		}
 		
 		pros::lcd::print(1, "%f", gps_status.yaw);
 
 		// reset all module rotations to unwind cords at the end of matches
-		if (controller.get_digital_new_press(DIGITAL_B)){
+		if (controller.get_digital_new_press(DIGITAL_DOWN)){
 			reset_modules();
 			running = false;
 		}
