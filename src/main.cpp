@@ -149,9 +149,9 @@ void reset_modules(){
  * and returns the smaller error value. Accounts for both
  * clockwise and counter-clockwise rotation.
 */
-double true_error(double degree_1, double degree_2) {
-    double counter_clockwise_error = normalize_angle(degree_2 - degree_1);
-    double clockwise_error = normalize_angle(degree_1 - degree_2);
+double true_error(double initial_degree, double final_degree) { // Positive is clockwise rotation, negative is counterclockwise
+    double counter_clockwise_error = normalize_angle(final_degree - initial_degree);
+    double clockwise_error = normalize_angle(initial_degree - final_degree);
 	
 	// return the smaller error
     if (counter_clockwise_error <= clockwise_error) {
