@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "autoSelect/selection.h"
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
@@ -37,14 +38,6 @@ double override_mag = primaries_rpm*0.6;
 bool strafe = false;
 
 /**
- * A callback function for LLEMU's center button.
- *
- * When this callback is fired, it will toggle line 2 of the LCD text between
- * "I was pressed!" and nothing.
- */
-void on_center_button() {}
-
-/**
  * Runs initialization code. This occurs as soon as the program is started.
  *
  * All other competition modes are blocked by initialize; it is recommended
@@ -52,6 +45,7 @@ void on_center_button() {}
  */
 void initialize() {
 	pros::lcd::initialize();
+	selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
@@ -187,7 +181,18 @@ vector<double> create_translate_vector(double x, double y){
 	double theta = (180/PI)*atan2(y, x);
 	double r = hypot(x,y);
 
-	if (field_oriented){theta += gps_status.yaw;} 
+	// calculate the correct coordinate frame shift for each side
+	double field_orient_offset = gps_status.yaw;
+	if (selector::auton >= 1 && selector::auton <= 2){ // red side
+		field_orient_offset -= 90.0;
+		pros::lcd::print(4, "Red Alliance Configuration");
+	}
+	else { // blue side
+		field_orient_offset += 90.0;
+		pros::lcd::print(4, "Blue Alliance Configuration");
+	}
+
+	if (field_oriented){theta += field_orient_offset;} 
 
 	vector<double> left_stick_polar = {r, normalize_angle(theta)};
 
@@ -355,9 +360,11 @@ void opcontrol() {
 			update_modules(module_vectors);
 		}
 		
+		// print gps information to the brain
 		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
-		pros::lcd::print(2, "X: %f Y: ", gps_status.x, gps_status.y);
+		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
 		
+		// print out orientation mode to controller
 		if (field_oriented){
 			controller.print(1, 0, "Field Oriented");
 		}
