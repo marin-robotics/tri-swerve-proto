@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "autoSelect/selection.h"
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
@@ -29,19 +30,12 @@ int primaries_rpm = 600;
 bool field_oriented = true;
 
 // Permanant constants
-double PI = 3.141592653;
+const double PI = 3.141592653;
+
 // Program variables
 double override_theta;
 double override_mag = primaries_rpm*0.6;
 bool strafe = false;
-
-/**
- * A callback function for LLEMU's center button.
- *
- * When this callback is fired, it will toggle line 2 of the LCD text between
- * "I was pressed!" and nothing.
- */
-void on_center_button() {}
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -51,6 +45,7 @@ void on_center_button() {}
  */
 void initialize() {
 	pros::lcd::initialize();
+	selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
@@ -186,7 +181,18 @@ vector<double> create_translate_vector(double x, double y){
 	double theta = (180/PI)*atan2(y, x);
 	double r = hypot(x,y);
 
-	if (field_oriented){theta += gps_status.yaw;} 
+	// calculate the correct coordinate frame shift for each side
+	double field_orient_offset = gps_status.yaw;
+	if (selector::auton >= 1 && selector::auton <= 2){ // red side
+		field_orient_offset -= 90.0;
+		pros::lcd::print(4, "Red Alliance Configuration");
+	}
+	else { // blue side
+		field_orient_offset += 90.0;
+		pros::lcd::print(4, "Blue Alliance Configuration");
+	}
+
+	if (field_oriented){theta += field_orient_offset;} 
 
 	vector<double> left_stick_polar = {r, normalize_angle(theta)};
 
@@ -320,8 +326,6 @@ void opcontrol() {
 		} else {
 			strafe = false;
 		}
-		
-		pros::lcd::print(1, "Strafing? %d", strafe);
 
 		// create translate vector
 		translate_vector = create_translate_vector(left_x, left_y);
@@ -345,8 +349,6 @@ void opcontrol() {
 		}
 
 		// Post-normalize speed: scale vectors
-		
-
 		if (!strafe){
 			// continue with normal drive code
 			// Pass them to the scaling function
@@ -358,12 +360,24 @@ void opcontrol() {
 			update_modules(module_vectors);
 		}
 		
-		pros::lcd::print(1, "%f", gps_status.yaw);
+		// print gps information to the brain
+		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
+		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
+		
+		// print out orientation mode to controller
+		if (field_oriented){
+			controller.print(1, 0, "Field Oriented");
+		}
+		else {
+			controller.print(1, 0, "Robot Oriented");
+		}
 
 		// reset all module rotations to unwind cords at the end of matches
-		if (controller.get_digital_new_press(DIGITAL_DOWN)){
-			reset_modules();
-			running = false;
+		if (controller.get_digital(DIGITAL_DOWN)){
+			if (controller.get_digital_new_press(DIGITAL_DOWN)){
+				reset_modules();
+				running = false;
+			}
 		}
 		
 		pros::delay(20);
