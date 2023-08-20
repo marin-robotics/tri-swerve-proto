@@ -29,7 +29,8 @@ int primaries_rpm = 600;
 bool field_oriented = true;
 
 // Permanant constants
-double PI = 3.141592653;
+const double PI = 3.141592653;
+
 // Program variables
 double override_theta;
 double override_mag = primaries_rpm*0.6;
@@ -320,8 +321,6 @@ void opcontrol() {
 		} else {
 			strafe = false;
 		}
-		
-		pros::lcd::print(1, "Strafing? %d", strafe);
 
 		// create translate vector
 		translate_vector = create_translate_vector(left_x, left_y);
@@ -345,8 +344,6 @@ void opcontrol() {
 		}
 
 		// Post-normalize speed: scale vectors
-		
-
 		if (!strafe){
 			// continue with normal drive code
 			// Pass them to the scaling function
@@ -358,12 +355,22 @@ void opcontrol() {
 			update_modules(module_vectors);
 		}
 		
-		pros::lcd::print(1, "%f", gps_status.yaw);
+		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
+		pros::lcd::print(2, "X: %f Y: ", gps_status.x, gps_status.y);
+		
+		if (field_oriented){
+			controller.print(1, 0, "Field Oriented");
+		}
+		else {
+			controller.print(1, 0, "Robot Oriented");
+		}
 
 		// reset all module rotations to unwind cords at the end of matches
-		if (controller.get_digital_new_press(DIGITAL_DOWN)){
-			reset_modules();
-			running = false;
+		if (controller.get_digital(DIGITAL_DOWN)){
+			if (controller.get_digital_new_press(DIGITAL_DOWN)){
+				reset_modules();
+				running = false;
+			}
 		}
 		
 		pros::delay(20);
