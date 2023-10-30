@@ -12,21 +12,19 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 pros::GPS gps(8);
 pros::c::gps_status_s_t gps_status;
 
-pros::Motor front_left_primary(21, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_primary(12, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_primary(20,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_primary(13,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor left_primary(19, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_primary(11, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_primary(10,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::Motor front_left_angle(10, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_angle(9,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_angle(2,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor left_angle(16, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor center_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor right_angle(21,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
-pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
+pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
+pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
 
 // Customizable parameters
-int swerve_size = 4;
+int swerve_size = 3;
 int primaries_rpm = 600;
 bool field_oriented = true;
 
@@ -296,8 +294,8 @@ void update_modules(vector<vector<double>> vectors) {
 // 
 void opcontrol() {
 	// Vectors
-	vector<double> default_angles = {45, 315, 135, 225}; //FL, FR, BL, BR 
-	vector<vector<double>> module_vectors(swerve_size, vector<double> {0}); // {{0,0},{0,0},{0,0}}
+	vector<double> default_angles = {60, 180, 300}; //FL, FR, BL, BR 
+	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
 	vector<double> translate_vector;
 	vector<double> yaw_vector;
 	vector<double> summed_polar_vector;
