@@ -2,6 +2,7 @@
 #include "pros/motors.hpp"
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 #include "autoSelect/selection.h"
 using namespace std;
@@ -36,6 +37,8 @@ const double PI = 3.141592653;
 double override_theta;
 double override_mag = primaries_rpm*0.6;
 bool strafe = false;
+double angle_gear_ratio = 5.5/3;
+int field_orient_offset = -90;
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -49,7 +52,7 @@ void initialize() {
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
-	angle_motors.set_zero_position(90*5.5); // Reset coordinate frame
+	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
 
 	gps.set_rotation(0);
 
@@ -71,7 +74,21 @@ void disabled() {}
  * This task will exit when the robot is enabled and autonomous or opcontrol
  * starts.
  */
-void competition_initialize() {}
+void competition_initialize() {
+	// Calculate the correct coordinate frame shift for each side
+	while ("WOOOHOOO"){
+		cout << (selector::auton);
+		
+		if (selector::auton > 0){ // red side
+			field_orient_offset = -90.0;
+			pros::lcd::print(4, "Red Alliance Configuration");
+		} 
+		else { // blue side
+			field_orient_offset = 90.0;
+			pros::lcd::print(4, "Blue Alliance Configuration");
+		}
+	}
+}
 
 /**
  * Runs the user autonomous code. This function will be started in its own task
@@ -135,7 +152,7 @@ double normalize_angle(double angle){
 */
 void reset_modules(){ 
 	for (int i = 0; i < swerve_size; i++){
-		angle_motors[i].move_absolute((90*5.5), 200);
+		angle_motors[i].move_absolute((90*angle_gear_ratio), 200);
 	}
 }
 
@@ -159,16 +176,14 @@ double true_error(double initial_degree, double final_degree) { // Positive is c
 // Vector Utils
 /**
  * Does exactly what you think it does.
- * @param x The X value of the stick being used to control yaw.
- * @param yaw_angle The default (optimal) yaw angle for the module.
+ * @param mag The magnitude of the vector.
+ * @param theta The angle (in degrees) of the vector.
 */
 vector<double> polar_to_rect(double mag, double theta){
-	// Get yaw vector for each module in polar coordinates,
-	// then convert to rectangular (always remember to pass radians in for theta!)
+	// Converts a polar coordinate vector (magnitude, theta) in degrees to a rectangular vector.  
 	double x = mag*cos((PI/180)*theta);
 	double y = mag*sin((PI/180)*theta);
-	vector<double> rect_vect = {x, y};
-	return rect_vect;
+	return vector<double> {x, y};
 }
 
 /**
@@ -176,33 +191,28 @@ vector<double> polar_to_rect(double mag, double theta){
  * @param x The X coordinate of the joystick being used to control translation.
  * @param y The Y coordinate of the joystick being used to control translation.
 */
-vector<double> create_translate_vector(double x, double y){
-	// get translate vector in polar coordinates
+
+vector<double> rect_to_polar(double x, double y){
+	// Converts a polar coordinate vector (magnitude, theta) in degrees to a rectangular vector.
+	double mag = hypot(x,y);
 	double theta = (180/PI)*atan2(y, x);
-	double r = hypot(x,y);
+	return vector<double> {mag, theta};
+}
 
-	// calculate the correct coordinate frame shift for each side
-	double field_orient_offset = gps_status.yaw;
-	if (selector::auton >= 1 && selector::auton <= 2){ // red side
-		field_orient_offset -= 90.0;
-		pros::lcd::print(4, "Red Alliance Configuration");
-	}
-	else { // blue side
-		field_orient_offset += 90.0;
-		pros::lcd::print(4, "Blue Alliance Configuration");
-	}
+/**
+ * Does exactly what you think it does.
+ * @param x The X coordinate of the joystick being used to control translation.
+ * @param y The Y coordinate of the joystick being used to control translation.
+*/
 
-	if (field_oriented){theta += field_orient_offset;} 
 
-	vector<double> left_stick_polar = {r, normalize_angle(theta)};
-
-	// convert to rectangular coordinates (making sure to convert theta back to radians)
-	double left_rect_x = left_stick_polar[0]*cos((PI/180)*left_stick_polar[1]); // r*cos(theta (in rads)) for x
-	double left_rect_y = left_stick_polar[0]*sin((PI/180)*left_stick_polar[1]); // r*sin(theta (in rads)) for y
-
-	vector<double> left_stick_rect = {left_rect_x, left_rect_y};
-
-	return left_stick_rect;
+vector<double> rotate_rect_vect(double x, double y, double adjust_amount){ // Check if field oriented first, adjust_amount = gps_status.yaw+field_orient_offset
+	// get translate vector in polar coordinates
+	vector<double> polar_vector = rect_to_polar(x, y);
+	// Adjust the angle of the vector (by the field oriented net direction)
+	polar_vector[1] = polar_vector[1] + adjust_amount;
+	// Return the vector converted back to rectangular
+	return polar_to_rect(polar_vector[0], polar_vector[1]);
 }
 
 /**
@@ -231,7 +241,7 @@ vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_
 	}
 	// Scale vectors accordingly
 	for (int i = 0; i < swerve_size; i++){
-		vectors[i][0] /= max_magnitude; // Normalize
+		vectors[i][0] /= max_magnitude; // Normalizes
 		vectors[i][0] *= max(raw_magnitude, right_x); // multiply by the largest of the two magnitudes 
 														   // to avoid vectors with 0 magnitude
 	}
@@ -253,7 +263,7 @@ void update_modules(vector<vector<double>> vectors) {
 		pros::Motor& primary_motor = primary_motors[i];
 
 		double target_theta = normalize_angle(vectors[i][1]);
-		double current_position = normalize_angle(angle_motor.get_position()/5.5); // div by 5.5 to account for 
+		double current_position = normalize_angle(angle_motor.get_position()/angle_gear_ratio); // div by angle_gear_ratio to account for 
 																						  // physical gear ratio
 		
 		// closer to flipped goal?
@@ -287,15 +297,16 @@ void update_modules(vector<vector<double>> vectors) {
 void opcontrol() {
 	// Vectors
 	vector<double> default_angles = {45, 315, 135, 225}; //FL, FR, BL, BR 
-	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
+	vector<vector<double>> module_vectors(swerve_size, vector<double> {0}); // {{0,0},{0,0},{0,0}}
 	vector<double> translate_vector;
 	vector<double> yaw_vector;
 	vector<double> summed_polar_vector;
 	vector<vector<double>> scaled_vectors;
-	
+
 	// loop
 	bool running = true;
 	while (running) {
+		cout << (selector::auton) << endl;
 		gps_status = gps.get_status();
 
 		if (controller.get_digital_new_press(DIGITAL_L1)){
@@ -327,37 +338,29 @@ void opcontrol() {
 			strafe = false;
 		}
 
-		// create translate vector
-		translate_vector = create_translate_vector(left_x, left_y);
+		// Create translational vector, rotate it if field oriented
+		if (field_oriented) {
+			translate_vector = rotate_rect_vect(left_x, left_y, (gps_status.yaw+field_orient_offset));
+		} else {
+			translate_vector = vector<double> {left_x, left_y};
+		}
 
 		// Create all yaw vectors & sum them with translate vector to create summed module vectors
 		for (int i = 0; i < swerve_size; i++){
 			if (!strafe){
 				yaw_vector = polar_to_rect(right_x, default_angles[i]);
-
-				vector<double> summed_vector = {yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]};
-
-				// Convert summed vector to polar
-				double magnitude = hypot(summed_vector[0], summed_vector[1]);
-				double theta = normalize_angle(((180/PI)*(atan2(summed_vector[1], summed_vector[0]))));
-				summed_polar_vector = {magnitude, theta};
+				summed_polar_vector = rect_to_polar(yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]);
+				module_vectors.at(i) = summed_polar_vector;
+				// Pass them to the scaling function
+				scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
+				update_modules(scaled_vectors); 
 			} else {
 				summed_polar_vector = {override_mag, override_theta};
+				module_vectors.at(i) = summed_polar_vector;
+				update_modules(module_vectors);
 			}
 			// store summed vector as the new target vector for the corresponding module
-			module_vectors.at(i) = summed_polar_vector;
-		}
-
-		// Post-normalize speed: scale vectors
-		if (!strafe){
-			// continue with normal drive code
-			// Pass them to the scaling function
-			scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
-			update_modules(scaled_vectors);
-		}
-		else {
-			// if strafing, no need to scale
-			update_modules(module_vectors);
+			
 		}
 		
 		// print gps information to the brain
