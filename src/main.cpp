@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "autoSelect/selection.h"
+#include "swerveUtils.h"
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
@@ -12,31 +13,46 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 pros::GPS gps(8);
 pros::c::gps_status_s_t gps_status;
 
+// Primary Drive Motors
 pros::Motor left_primary(19, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor center_primary(11, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_primary(10,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 
+// Angle Drive Motors
 pros::Motor left_angle(16, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor center_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor right_angle(21,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-
-pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
 pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
+
+// Shooter Motors
+pros::Motor shooter_top(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor shooter_bottom(12, pros::E_MOTOR_GEAR_RED, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor_Group shooter_motors {shooter_top, shooter_bottom};
+
 
 // Customizable parameters
 int swerve_size = 3;
 int primaries_rpm = 600;
 bool field_oriented = true;
 
-// Permanant constants
-const double PI = 3.141592653;
-
 // Program variables
 double override_theta;
 double override_mag = primaries_rpm*0.6;
-bool strafe = false;
 double angle_gear_ratio = 5.5/3;
 int field_orient_offset = -90;
+
+// Swerve Variables
+vector<double> default_angles = {60, 180, 300}; //FL, FR, BL, BR 
+vector<PolarVector> module_vectors(swerve_size, PolarVector {0,0});
+RectangularVector translate_vector;
+RectangularVector yaw_vector;
+PolarVector summed_polar_vector;
+vector<PolarVector> final_vectors;
+RobotController ViperDrive;
+
+// Mechanism Variables
+bool shooting = false;
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -51,7 +67,7 @@ void initialize() {
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
-
+	shooter_motors.move_relative(360, 30); // Wind up shooter
 	gps.set_rotation(0);
 
 }
@@ -101,116 +117,14 @@ void competition_initialize() {
  */
 void autonomous() {}
 
-/**
- * Runs the operator control code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the operator
- * control mode.
- *
- * If no competition control is connected, this function will run immediately
- * following initialize().
- *
- * If the robot is disabled or communications is lost, the
- * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
- */
-
-// Utilities
-/**
- * Returns the sign of the argument 
- * as -1 for negative, 1 for positive,
- * or 0 for a value neither - nor +
-*/
-int sgn(double value) {
-	return (value > 0) - (value < 0);
-}
-
-/**
- * Squares the given value, 
- * accounting for its sign.
-*/
-double pow_with_sign(double x) {
-	if (x < 0) {
-	return -x * x;
-	} else {
-	return x * x;
-	}
-}
-
-/**
- * Normalizes the given angle into 
- * the range of 0-360 degrees.
-*/
-double normalize_angle(double angle){
-	return fmod(angle + 360, 360);
-}
 
 /**
  * Resets modules to absolute zero to untangle wires at the end of a match.
 */
-void reset_modules(){ 
+void reset_modules(){ // Rethink this shit
 	for (int i = 0; i < swerve_size; i++){
 		angle_motors[i].move_absolute((90*angle_gear_ratio), 200);
 	}
-}
-
-/**
- * Calculates the real difference between two degrees
- * and returns the smaller error value. Accounts for both
- * clockwise and counter-clockwise rotation.
-*/
-double true_error(double initial_degree, double final_degree) { // Positive is clockwise rotation, negative is counterclockwise
-    double counter_clockwise_error = normalize_angle(final_degree - initial_degree);
-    double clockwise_error = normalize_angle(initial_degree - final_degree);
-	
-	// return the smaller error
-    if (counter_clockwise_error <= clockwise_error) {
-        return -counter_clockwise_error;
-    } else {
-        return clockwise_error;
-    }
-}
-
-// Vector Utils
-/**
- * Does exactly what you think it does.
- * @param mag The magnitude of the vector.
- * @param theta The angle (in degrees) of the vector.
-*/
-vector<double> polar_to_rect(double mag, double theta){
-	// Converts a polar coordinate vector (magnitude, theta) in degrees to a rectangular vector.  
-	double x = mag*cos((PI/180)*theta);
-	double y = mag*sin((PI/180)*theta);
-	return vector<double> {x, y};
-}
-
-/**
- * Does exactly what you think it does.
- * @param x The X coordinate of the joystick being used to control translation.
- * @param y The Y coordinate of the joystick being used to control translation.
-*/
-
-vector<double> rect_to_polar(double x, double y){
-	// Converts a polar coordinate vector (magnitude, theta) in degrees to a rectangular vector.
-	double mag = hypot(x,y);
-	double theta = (180/PI)*atan2(y, x);
-	return vector<double> {mag, theta};
-}
-
-/**
- * Does exactly what you think it does.
- * @param x The X coordinate of the joystick being used to control translation.
- * @param y The Y coordinate of the joystick being used to control translation.
-*/
-
-
-vector<double> rotate_rect_vect(double x, double y, double adjust_amount){ // Check if field oriented first, adjust_amount = gps_status.yaw+field_orient_offset
-	// get translate vector in polar coordinates
-	vector<double> polar_vector = rect_to_polar(x, y);
-	// Adjust the angle of the vector (by the field oriented net direction)
-	polar_vector[1] = polar_vector[1] + adjust_amount;
-	// Return the vector converted back to rectangular
-	return polar_to_rect(polar_vector[0], polar_vector[1]);
 }
 
 /**
@@ -226,21 +140,21 @@ vector<double> rotate_rect_vect(double x, double y, double adjust_amount){ // Ch
  * @param right_x The X coordinate of the right joystick, 
  * 		which is used for yaw calculations.
 */
-vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_magnitude, double right_x){
-	// clamp both magnitudes to a max of 1
-	if (raw_magnitude > 1) {raw_magnitude = 1;}
-	right_x = abs(right_x); // right x is yaw magnitude
-	if (right_x > 1) {right_x = 1;}
+vector<PolarVector> scale_vectors(vector<PolarVector> vectors, double translate_magnitude, double yaw_magnitude){ //change right x to generalize
+	if (translate_magnitude > 1) {translate_magnitude = 1;} // Incase the magnitude of the translation is greater than 1
+
+	yaw_magnitude = abs(yaw_magnitude); // right x is yaw magnitude
+	if (yaw_magnitude > 1) {yaw_magnitude = 1;}
 
 	// Get maximum magnitude of the vectors
 	double max_magnitude = 0;
 	for (int i = 0; i < swerve_size; i++){
-		if (vectors[i][0] > max_magnitude) {max_magnitude = vectors[i][0];}
+		if (vectors[i].mag > max_magnitude) {max_magnitude = vectors[i].mag;}
 	}
 	// Scale vectors accordingly
 	for (int i = 0; i < swerve_size; i++){
-		vectors[i][0] /= max_magnitude; // Normalizes
-		vectors[i][0] *= max(raw_magnitude, right_x); // multiply by the largest of the two magnitudes 
+		vectors[i].mag /= max_magnitude; // Normalizes
+		vectors[i].mag *= max(translate_magnitude, yaw_magnitude); // multiply by the largest of the two magnitudes 
 														   // to avoid vectors with 0 magnitude
 	}
 	return vectors;
@@ -251,19 +165,41 @@ vector<vector<double>> scale_vectors(vector<vector<double>> vectors, double raw_
 /**
  * Updates each swerve module with the given vectors, 
  * taken in polar coordinates.
- * @param vectors A vector<vector<double>> that store the individual 
- * 		calculated vectors of each swerve module, in the format (r, theta).
+ * @param polar_translate_vector A PolarVector containing the translational vector applied in swerve drive.
+ * @param yaw_magnitude A value for the yaw applied in swerve drive; negative turns left, positive turns right. From 
+ * 		
 */
-void update_modules(vector<vector<double>> vectors) {
+vector<vector<double>> update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation) { // Static variables here are swerve size, default angles
+	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
+
+	if (orientation == ABSOLUTE) { // Do motion field oriented
+		translate_vector = rotate_rect_vect(translate_vector, (gps_status.yaw+field_orient_offset));
+	}
+
+	// Create all yaw vectors & sum them with translate vector to create summed module vectors
+	for (int i = 0; i < swerve_size; i++){
+		// Create yaw vector
+		PolarVector polar_yaw_vector {yaw_magnitude, default_angles[i]};
+		RectangularVector yaw_vector = polar_to_rect(polar_yaw_vector);
+		
+		// Add yaw with translate
+		RectangularVector summed_rect_vector {yaw_vector.x+translate_vector.x, yaw_vector.y+translate_vector.y};
+		PolarVector summed_vector = rect_to_polar(summed_rect_vector);
+		
+		// UPDATE module_vectors which stores the vectors applied to each module
+		module_vectors.at(i) = summed_vector;
+	}
+		
+		final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
+
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
 		pros::Motor& angle_motor = angle_motors[i];
 		pros::Motor& primary_motor = primary_motors[i];
 
-		double target_theta = normalize_angle(vectors[i][1]);
+		double target_theta = normalize_angle(final_vectors[i].theta);
 		double current_position = normalize_angle(angle_motor.get_position()/angle_gear_ratio); // div by angle_gear_ratio to account for 
 																						  // physical gear ratio
-		
 		// closer to flipped goal?
 		double flipped_goal = normalize_angle(target_theta + 180);
 		if (abs(true_error(target_theta, current_position)) 
@@ -278,7 +214,7 @@ void update_modules(vector<vector<double>> vectors) {
 		double error = true_error(target_theta, current_position);
 		   
 		// Change angle at a proportional speed with deadzone based on magnitude
-		if (vectors[i][0] > 0.00) // mag > 0?
+		if (final_vectors[i].mag > 0.00) // mag > 0?
 		{
 			angle_motor = (127.0/30.0) * error; // divisor is the point where speed reaches max
 		} else {
@@ -286,29 +222,54 @@ void update_modules(vector<vector<double>> vectors) {
 		}
 
 		// Change primary velocities
-		primary_motor.move_velocity(int(vectors[i][0]*primaries_rpm));
+		primary_motor.move_velocity(int(final_vectors[i].mag*primaries_rpm));
+	}
+
+	return vector<vector<double>> {{},{},{}}; // Return errors, velocities, and 
+}
+
+/**
+ * Runs the operator control code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the operator
+ * control mode.
+ *
+ * If no competition control is connected, this function will run immediately
+ * following initialize().
+ *
+ * If the robot is disabled or communications is lost, the
+ * operator control task will be stopped. Re-enabling the robot will restart the
+ * task, not resume it from where it left off.
+ */
+pros::Task fire_shooter() {
+	if (shooting == false){
+		shooting = true;
+		shooter_motors.tare_position();
+		shooter_motors.move_relative(360, 30);
+		while (abs(shooter_top.get_position()-360) > 3){
+			pros::delay(10);
+		}
+		shooting = false;
 	}
 }
 
+pros::Task toggle_wings();
 
-// 
 void opcontrol() {
-	// Vectors
-	vector<double> default_angles = {60, 180, 300}; //FL, FR, BL, BR 
-	vector<vector<double>> module_vectors(swerve_size, vector<double> {0});
-	vector<double> translate_vector;
-	vector<double> yaw_vector;
-	vector<double> summed_polar_vector;
-	vector<vector<double>> scaled_vectors;
 
 	// loop
 	bool running = true;
 	while (running) {
-		cout << (selector::auton) << endl;
+		// cout << (selector::auton) << endl;	
 		gps_status = gps.get_status();
+		ViperDrive.update_position({gps_status.x, gps_status.y}, gps_status.yaw);
+
+		if (controller.get_digital(DIGITAL_R1)){
+			fire_shooter();
+		}
 
 		if (controller.get_digital_new_press(DIGITAL_L1)){
-			field_oriented = !field_oriented;
+			ViperDrive.toggle_orientation();
 		}
 
 		// Get normalized stick inputs and scale by square
@@ -318,47 +279,18 @@ void opcontrol() {
 
 		// Strafing on button presses
 		if (controller.get_digital(DIGITAL_A)){
-			strafe = true;
-			override_theta = 0.0;
+			ViperDrive.move_in_direction(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_Y)){
-			strafe = true;
-			override_theta = 180.0;
+			ViperDrive.move_in_direction(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_X)){
-			strafe = true;
-			override_theta = 90.0;
+			ViperDrive.move_in_direction(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_B)){
-			strafe = true;
-			override_theta = 270.0;
+			ViperDrive.move_in_direction(RELATIVE, 0, 127);
 		} else {
-			strafe = false;
-		}
-
-		// Create translational vector, rotate it if field oriented
-		if (field_oriented) {
-			translate_vector = rotate_rect_vect(left_x, left_y, (gps_status.yaw+field_orient_offset));
-		} else {
-			translate_vector = vector<double> {left_x, left_y};
-		}
-
-		// Create all yaw vectors & sum them with translate vector to create summed module vectors
-		for (int i = 0; i < swerve_size; i++){
-			if (!strafe){
-				yaw_vector = polar_to_rect(right_x, default_angles[i]);
-				summed_polar_vector = rect_to_polar(yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]);
-				module_vectors.at(i) = summed_polar_vector;
-				// Pass them to the scaling function
-				scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
-				update_modules(scaled_vectors); 
-			} else {
-				summed_polar_vector = {override_mag, override_theta};
-				module_vectors.at(i) = summed_polar_vector;
-				update_modules(module_vectors);
-			}
-			// store summed vector as the new target vector for the corresponding module
-			
+			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
 		
 		// print gps information to the brain
@@ -366,7 +298,7 @@ void opcontrol() {
 		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
 		
 		// print out orientation mode to controller
-		if (field_oriented){
+		if (ViperDrive.controller_orientation == ABSOLUTE){
 			controller.print(1, 0, "Field Oriented");
 		}
 		else {
@@ -381,6 +313,7 @@ void opcontrol() {
 			}
 		}
 		
+
 		pros::delay(20);
 	}
 }
