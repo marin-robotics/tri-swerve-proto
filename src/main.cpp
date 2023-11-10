@@ -9,7 +9,6 @@
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
-
 pros::GPS gps(8);
 pros::c::gps_status_s_t gps_status;
 
@@ -30,6 +29,11 @@ pros::Motor shooter_top(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER
 pros::Motor shooter_bottom(12, pros::E_MOTOR_GEAR_RED, true, pros::E_MOTOR_ENCODER_DEGREES);
 pros::Motor_Group shooter_motors {shooter_top, shooter_bottom};
 
+// Wing Pneumatics
+#define LEFT_WING_PNUEMATIC 'A'
+#define RIGHT_WING_PNUEMATIC 'B'
+pros::ADIDigitalOut left_wing(LEFT_WING_PNUEMATIC);  
+pros::ADIDigitalOut right_wing(RIGHT_WING_PNUEMATIC);
 
 // Customizable parameters
 int swerve_size = 3;
@@ -170,10 +174,17 @@ vector<PolarVector> scale_vectors(vector<PolarVector> vectors, double translate_
  * 		
 */
 vector<vector<double>> update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation) { // Static variables here are swerve size, default angles
+	// Telemetry data to return
+	vector<double> angle_errors(swerve_size, 0);
+	vector<double> angle_velocities(swerve_size, 0);
+	vector<double> primary_velocities(swerve_size, 0);
+	
+	// Convert translational vector to add it with the rotational
 	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
 
-	if (orientation == ABSOLUTE) { // Do motion field oriented
-		translate_vector = rotate_rect_vect(translate_vector, (gps_status.yaw+field_orient_offset));
+	// If the motion request is based on the absolute angle relative to the field, adjust eh  
+	if (orientation == ABSOLUTE) { 
+		translate_vector = rotate_rect_vect(translate_vector, (ViperDrive.current_angle+field_orient_offset));
 	}
 
 	// Create all yaw vectors & sum them with translate vector to create summed module vectors
@@ -190,7 +201,7 @@ vector<vector<double>> update_modules(PolarVector polar_translate_vector, double
 		module_vectors.at(i) = summed_vector;
 	}
 		
-		final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
+	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
 
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
@@ -212,20 +223,27 @@ vector<vector<double>> update_modules(PolarVector polar_translate_vector, double
 
 		// Calculate true error between our current position and the new target
 		double error = true_error(target_theta, current_position);
+		// Log error to return later
+		angle_errors.at(i) = error;
 		   
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (final_vectors[i].mag > 0.00) // mag > 0?
 		{
-			angle_motor = (127.0/30.0) * error; // divisor is the point where speed reaches max
+			double angle_motor_velocity = (127.0/30.0) * error; // divisor is the point where speed reaches max
+			angle_velocities.at(i) = angle_motor_velocity;
+			angle_motor = angle_motor_velocity;
+
 		} else {
 			angle_motor = 0;
 		}
 
 		// Change primary velocities
-		primary_motor.move_velocity(int(final_vectors[i].mag*primaries_rpm));
+		double primary_motor_velocity = int(final_vectors[i].mag*primaries_rpm);
+		primary_velocities.at(i) = primary_motor_velocity;
+		primary_motor.move_velocity(primary_motor_velocity);
 	}
 
-	return vector<vector<double>> {{},{},{}}; // Return errors, velocities, and 
+	return vector<vector<double>> {angle_errors,angle_velocities,primary_velocities}; // Return errors, primary velocities, and angle velocities... anything else? 
 }
 
 /**
@@ -241,7 +259,7 @@ vector<vector<double>> update_modules(PolarVector polar_translate_vector, double
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-pros::Task fire_shooter() {
+void fire_shooter() {
 	if (shooting == false){
 		shooting = true;
 		shooter_motors.tare_position();
@@ -253,26 +271,24 @@ pros::Task fire_shooter() {
 	}
 }
 
-pros::Task toggle_wings();
-
 void opcontrol() {
 
 	// loop
 	bool running = true;
 	while (running) {
 		// cout << (selector::auton) << endl;	
-		gps_status = gps.get_status();
-		ViperDrive.update_position({gps_status.x, gps_status.y}, gps_status.yaw);
+		
+		ViperDrive.update_position();
 
 		if (controller.get_digital(DIGITAL_R1)){
-			fire_shooter();
+			pros::Task shoot(fire_shooter);
 		}
 
 		if (controller.get_digital_new_press(DIGITAL_L1)){
 			ViperDrive.toggle_orientation();
 		}
 
-		// Get normalized stick inputs and scale by square
+		// Get stick inputs, normalize between -1 to 1, and scale by square function.
 		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
@@ -293,6 +309,10 @@ void opcontrol() {
 			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
 		
+		if (controller.get_digital_new_press(DIGITAL_L2)){
+			ViperDrive.toggle_blocker();
+		}
+
 		// print gps information to the brain
 		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
 		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
