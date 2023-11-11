@@ -4,10 +4,12 @@ Necessary:
 - Add field oriented for both color alliances
 - Figure out how to handle coordinate system for both colored alliances.
     a) One option is to convert all the coordinates and angles by turning them 180 degrees, and then run everthing based of those coordinates? I think this would work and then the semi-auton manual functions like blocking the goal only have to be implemented once. 
+- Learn how the auton selector works
 
 Test/fix:
 - Test shooter code
 - Test wings code
+- Test driving
 - Test gps updating
 - Still drives backwards?
 - Test that positive yaw vector rotates clockwise

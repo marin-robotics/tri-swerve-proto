@@ -158,15 +158,15 @@ public:
     // Toggle the blocker state (raise/lower or open/close)
     void toggle_blocker() {
         blocker_state = !blocker_state;
+    }
+    
+    void update_blocker(){
         if (blocker_state) {
-            left_wing.set_value(true);
-            right_wing.set_value(true);
+            wings.set_value(false);
         } else {
-            left_wing.set_value(false);
-            right_wing.set_value(false);
+            wings.set_value(true);
         }
     }
-
 
 };
 

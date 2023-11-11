@@ -7,8 +7,7 @@
 #include "pros/gps.hpp"
 
 // Wing Pneumatics
-#define LEFT_WING_PNEUMATIC 'A'
-#define RIGHT_WING_PNEUMATIC 'B'
+#define WING_PNEUMATIC 'A'
 
 // Controller
 extern pros::Controller controller;
@@ -35,7 +34,6 @@ extern pros::Motor shooter_bottom;
 extern pros::Motor_Group shooter_motors;
 
 // Wing Pneumatics
-extern pros::ADIDigitalOut left_wing;
-extern pros::ADIDigitalOut right_wing;
+extern pros::ADIDigitalOut wings;
 
 #endif // ROBOT_CONFIG_H
