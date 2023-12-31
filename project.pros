@@ -325,7 +325,9 @@
       }
     },
     "upload_options": {
-      "description": "Swerve Code!"
+      "description": "Swerve Code!",
+      "slot": 3,
+      "icon": "pizza"
     }
   }
 }
