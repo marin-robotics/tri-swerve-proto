@@ -1,4 +1,6 @@
 #include "main.h"
+#include "pros/adi.hpp"
+#include "pros/motors.h"
 #include "pros/motors.hpp"
 #include <algorithm>
 #include <cmath>
@@ -9,26 +11,30 @@ using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
 
-pros::GPS gps(8);
+pros::GPS gps(13);
 pros::c::gps_status_s_t gps_status;
 
-pros::Motor front_left_primary(21, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_primary(12, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_primary(20,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_primary(13,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_left_primary(1, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_primary(10, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_primary(3,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_primary(8,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::Motor front_left_angle(10, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_angle(1, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_angle(9,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_angle(2,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_left_angle(2, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_angle(21, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_angle(11,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_angle(9,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
 pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
 
+pros::Motor shooter(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
+
+pros::ADIDigitalIn triball_loaded(8); // 8 is H
+
 // Customizable parameters
 int swerve_size = 4;
 int primaries_rpm = 600;
-bool field_oriented = true;
+bool field_oriented = false;
 
 // Permanant constants
 const double PI = 3.141592653;
@@ -39,6 +45,7 @@ double override_mag = primaries_rpm*0.6;
 bool strafe = false;
 double angle_gear_ratio = 5.5/3;
 int field_orient_offset = -90;
+bool match_load_mode = false;
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -48,7 +55,6 @@ int field_orient_offset = -90;
  */
 void initialize() {
 	pros::lcd::initialize();
-	selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
@@ -76,18 +82,18 @@ void disabled() {}
  */
 void competition_initialize() {
 	// Calculate the correct coordinate frame shift for each side
-	while ("WOOOHOOO"){
-		cout << (selector::auton);
+	// while ("WOOOHOOO"){
+	// 	cout << (selector::auton);
 		
-		if (selector::auton > 0){ // red side
-			field_orient_offset = -90.0;
-			pros::lcd::print(4, "Red Alliance Configuration");
-		} 
-		else { // blue side
-			field_orient_offset = 90.0;
-			pros::lcd::print(4, "Blue Alliance Configuration");
-		}
-	}
+	// 	if (selector::auton > 0){ // red side
+	// 		field_orient_offset = -90.0;
+	// 		pros::lcd::print(4, "Red Alliance Configuration");
+	// 	} 
+	// 	else { // blue side
+	// 		field_orient_offset = 90.0;
+	// 		pros::lcd::print(4, "Blue Alliance Configuration");
+	// 	}
+	// }
 }
 
 /**
@@ -305,84 +311,101 @@ void opcontrol() {
 
 	// loop
 	bool running = true;
+	bool first_loop = true;
+
 	while (running) {
-		cout << (selector::auton) << endl;
 		gps_status = gps.get_status();
 
 		if (controller.get_digital_new_press(DIGITAL_L1)){
 			field_oriented = !field_oriented;
 		}
-
-		// Get normalized stick inputs and scale by square
-		double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
-		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
-		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
-
-		// Strafing on button presses
-		if (controller.get_digital(DIGITAL_A)){
-			strafe = true;
-			override_theta = 0.0;
-		}
-		else if (controller.get_digital(DIGITAL_Y)){
-			strafe = true;
-			override_theta = 180.0;
-		}
-		else if (controller.get_digital(DIGITAL_X)){
-			strafe = true;
-			override_theta = 90.0;
-		}
-		else if (controller.get_digital(DIGITAL_B)){
-			strafe = true;
-			override_theta = 270.0;
-		} else {
-			strafe = false;
+		if (controller.get_digital_new_press(DIGITAL_L2)){
+			match_load_mode = !match_load_mode;
 		}
 
-		// Create translational vector, rotate it if field oriented
-		if (field_oriented) {
-			translate_vector = rotate_rect_vect(left_x, left_y, (gps_status.yaw+field_orient_offset));
-		} else {
-			translate_vector = vector<double> {left_x, left_y};
-		}
+		// drive like normal
+		if (!match_load_mode){
+			first_loop = true;
+			// Get normalized stick inputs and scale by square
+			double left_y = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_Y)) / 127);
+			double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
+			double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
-		// Create all yaw vectors & sum them with translate vector to create summed module vectors
-		for (int i = 0; i < swerve_size; i++){
-			if (!strafe){
-				yaw_vector = polar_to_rect(right_x, default_angles[i]);
-				summed_polar_vector = rect_to_polar(yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]);
-				module_vectors.at(i) = summed_polar_vector;
-				// Pass them to the scaling function
-				scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
-				update_modules(scaled_vectors); 
-			} else {
-				summed_polar_vector = {override_mag, override_theta};
-				module_vectors.at(i) = summed_polar_vector;
-				update_modules(module_vectors);
+			// Strafing on button presses
+			if (controller.get_digital(DIGITAL_A)){
+				strafe = true;
+				override_theta = 0.0;
 			}
-			// store summed vector as the new target vector for the corresponding module
+			else if (controller.get_digital(DIGITAL_Y)){
+				strafe = true;
+				override_theta = 180.0;
+			}
+			else if (controller.get_digital(DIGITAL_X)){
+				strafe = true;
+				override_theta = 90.0;
+			}
+			else if (controller.get_digital(DIGITAL_B)){
+				strafe = true;
+				override_theta = 270.0;
+			} else {
+				strafe = false;
+			}
+
+			// Create translational vector, rotate it if field oriented
+			if (field_oriented) {
+				translate_vector = rotate_rect_vect(left_x, left_y, (gps_status.yaw+field_orient_offset));
+			} else {
+				translate_vector = vector<double> {left_x, left_y};
+			}
+
+			// Create all yaw vectors & sum them with translate vector to create summed module vectors
+			for (int i = 0; i < swerve_size; i++){
+				if (!strafe){
+					yaw_vector = polar_to_rect(right_x, default_angles[i]);
+					summed_polar_vector = rect_to_polar(yaw_vector[0]+translate_vector[0], yaw_vector[1]+translate_vector[1]);
+					module_vectors.at(i) = summed_polar_vector;
+					// Pass them to the scaling function
+					scaled_vectors = scale_vectors(module_vectors, hypot(left_x, left_y), right_x);
+					update_modules(scaled_vectors); 
+				} else {
+					summed_polar_vector = {override_mag, override_theta};
+					module_vectors.at(i) = summed_polar_vector;
+					update_modules(module_vectors);
+				}
+				// store summed vector as the new target vector for the corresponding module
+				
+			}
 			
+			// print gps information to the brain
+			pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
+			pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
+			
+			// print out orientation mode to controller
+			if (field_oriented){
+				controller.print(1, 0, "Field Oriented");
+			}
+			else {
+				controller.print(1, 0, "Robot Oriented");
+			}
+		} else { // fire shooter when a triball is detected
+			if (first_loop){
+				shooter.move_relative(-360, -100); // stow in ready pos
+				first_loop = false;
+			}
+			if (triball_loaded.get_new_press()){
+				pros::delay(250);
+				shooter.move_relative(-360, -100);
+			}
 		}
 		
-		// print gps information to the brain
-		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
-		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
-		
-		// print out orientation mode to controller
-		if (field_oriented){
-			controller.print(1, 0, "Field Oriented");
-		}
-		else {
-			controller.print(1, 0, "Robot Oriented");
-		}
+		pros::lcd::print(5, "Matchloading: %d", match_load_mode);
+		pros::lcd::print(6, "LS Value: %d", triball_loaded.get_value());
 
 		// reset all module rotations to unwind cords at the end of matches
 		if (controller.get_digital(DIGITAL_DOWN)){
-			if (controller.get_digital_new_press(DIGITAL_DOWN)){
-				reset_modules();
-				running = false;
-			}
-		}
-		
+			reset_modules();
+		}	
+
 		pros::delay(20);
 	}
 }
