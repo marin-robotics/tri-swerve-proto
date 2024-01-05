@@ -29,7 +29,8 @@ pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_a
 
 pros::Motor shooter(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::ADIDigitalIn triball_loaded(8); // 8 is H
+pros::ADIDigitalIn triball_loaded(8); // 8 is H, 1 is A
+pros::ADIDigitalIn shooter_ready(7);
 
 // Customizable parameters
 int swerve_size = 4;
@@ -298,6 +299,20 @@ void update_modules(vector<vector<double>> vectors) {
 	}
 }
 
+/***
+ * Fires the shooter if mode is any nonzero integer
+ * Stows the shooter in ready position if mode = 0
+*/
+void fire_shooter(int mode){
+	if (mode != 0){
+		shooter.move_velocity(-127);
+		pros::delay(150);
+	}
+	while (!shooter_ready.get_value()){
+		shooter.move_velocity(-120);
+	}
+	shooter.move_velocity(0);
+}
 
 // 
 void opcontrol() {
@@ -312,6 +327,7 @@ void opcontrol() {
 	// loop
 	bool running = true;
 	bool first_loop = true;
+	shooter.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
 	while (running) {
 		gps_status = gps.get_status();
@@ -389,17 +405,17 @@ void opcontrol() {
 			}
 		} else { // fire shooter when a triball is detected
 			if (first_loop){
-				shooter.move_relative(-360, -100); // stow in ready pos
+				fire_shooter(0);
 				first_loop = false;
 			}
-			if (triball_loaded.get_new_press()){
-				pros::delay(250);
-				shooter.move_relative(-360, -100);
+			if (triball_loaded.get_value()){
+				pros::delay(150);
+				fire_shooter(1);
 			}
 		}
 		
 		pros::lcd::print(5, "Matchloading: %d", match_load_mode);
-		pros::lcd::print(6, "LS Value: %d", triball_loaded.get_value());
+		pros::lcd::print(6, "LS Value: %d", shooter_ready.get_value());
 
 		// reset all module rotations to unwind cords at the end of matches
 		if (controller.get_digital(DIGITAL_DOWN)){
