@@ -173,10 +173,11 @@ vector<PolarVector> scale_vectors(vector<PolarVector> vectors, double translate_
  * @param yaw_magnitude A value for the yaw applied in swerve drive; negative turns left, positive turns right. From 
  * 		
 */
-vector<vector<double>> update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation) { // Static variables here are swerve size, default angles
+
+SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation) { // Static variables here are swerve size, default angles
 	// Telemetry data to return
-	vector<double> angle_errors(swerve_size, 0);
-	vector<double> angle_velocities(swerve_size, 0);
+	vector<double> angle_errors(swerve_size, 0); // Error values for the angle motors (final - current positions)
+	vector<double> angle_velocities(swerve_size, 0); // Angle motor velocities
 	vector<double> primary_velocities(swerve_size, 0);
 	
 	// Convert translational vector to add it with the rotational
@@ -242,8 +243,12 @@ vector<vector<double>> update_modules(PolarVector polar_translate_vector, double
 		primary_velocities.at(i) = primary_motor_velocity;
 		primary_motor.move_velocity(primary_motor_velocity);
 	}
-
-	return vector<vector<double>> {angle_errors,angle_velocities,primary_velocities}; // Return errors, primary velocities, and angle velocities... anything else? 
+	
+	SwerveModuleTelemetry telemetryData;
+    telemetryData.angleErrors = angle_errors;
+    telemetryData.angleVelocities = angle_velocities;
+    telemetryData.primaryVelocities = primary_velocities;
+	return telemetryData;
 }
 
 /**
@@ -259,17 +264,6 @@ vector<vector<double>> update_modules(PolarVector polar_translate_vector, double
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-void fire_shooter() {
-	if (shooting == false){
-		shooting = true;
-		shooter_motors.tare_position();
-		shooter_motors.move_relative(360, 30);
-		while (abs(shooter_top.get_position()-360) > 3){
-			pros::delay(10);
-		}
-		shooting = false;
-	}
-}
 
 void opcontrol() {
 
@@ -281,7 +275,7 @@ void opcontrol() {
 		ViperDrive.update_position();
 
 		if (controller.get_digital(DIGITAL_R1)){
-			pros::Task shoot(fire_shooter);
+			//pros::Task shoot(fire_shooter);
 		}
 
 		if (controller.get_digital_new_press(DIGITAL_L1)){

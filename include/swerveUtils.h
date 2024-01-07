@@ -30,6 +30,12 @@ struct PolarVector {
     double theta;
 };
 
+struct SwerveModuleTelemetry {
+    std::vector<double> angleErrors;
+    std::vector<double> angleVelocities;
+    std::vector<double> primaryVelocities;
+};
+
 // Function declarations
 int sgn(double value);
 double pow_with_sign(double x);
