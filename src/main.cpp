@@ -9,34 +9,29 @@
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
-pros::GPS gps(8);
+pros::GPS gps(13);
 pros::c::gps_status_s_t gps_status;
 
-// Primary Drive Motors
-pros::Motor left_primary(19, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_primary(11, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor right_primary(10,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor_Group primary_motors {left_primary, center_primary, right_primary};
+pros::Motor front_left_primary(1, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_primary(10, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_primary(3,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_primary(8,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-// Angle Drive Motors
-pros::Motor left_angle(16, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor center_angle(18, pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor right_angle(21,pros::E_MOTOR_GEAR_GREEN, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor_Group angle_motors {left_angle, center_angle, right_angle};
+pros::Motor front_left_angle(2, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_angle(21, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_angle(11,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_angle(9,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
 
-// Shooter Motors
-pros::Motor shooter_top(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor shooter_bottom(12, pros::E_MOTOR_GEAR_RED, true, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor_Group shooter_motors {shooter_top, shooter_bottom};
+pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
+pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
 
-// Wing Pneumatics
-#define LEFT_WING_PNUEMATIC 'A'
-#define RIGHT_WING_PNUEMATIC 'B'
-pros::ADIDigitalOut left_wing(LEFT_WING_PNUEMATIC);  
-pros::ADIDigitalOut right_wing(RIGHT_WING_PNUEMATIC);
+pros::Motor shooter(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
+
+pros::ADIDigitalIn triball_loaded(8); // 8 is H, 1 is A
+pros::ADIDigitalIn shooter_ready(7);
 
 // Customizable parameters
-int swerve_size = 3;
+int swerve_size = 4;
 int primaries_rpm = 600;
 bool field_oriented = true;
 
@@ -47,7 +42,7 @@ double angle_gear_ratio = 5.5/3;
 int field_orient_offset = -90;
 
 // Swerve Variables
-vector<double> default_angles = {60, 180, 300}; //FL, FR, BL, BR 
+vector<double> default_angles = {45, 315, 135, 225}; //FL, FR, BL, BR 
 vector<PolarVector> module_vectors(swerve_size, PolarVector {0,0});
 RectangularVector translate_vector;
 RectangularVector yaw_vector;
@@ -66,12 +61,12 @@ bool shooting = false;
  */
 void initialize() {
 	pros::lcd::initialize();
-	selector::init();
+	//selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
-	shooter_motors.move_relative(360, 30); // Wind up shooter
+	//shooter_motors.move_relative(360, 30); // Wind up shooter
 	gps.set_rotation(0);
 
 }
@@ -94,18 +89,18 @@ void disabled() {}
  */
 void competition_initialize() {
 	// Calculate the correct coordinate frame shift for each side
-	while ("WOOOHOOO"){
-		cout << (selector::auton);
+	// while ("WOOOHOOO"){
+	// 	cout << (selector::auton);
 		
-		if (selector::auton > 0){ // red side
-			field_orient_offset = -90.0;
-			pros::lcd::print(4, "Red Alliance Configuration");
-		} 
-		else { // blue side
-			field_orient_offset = 90.0;
-			pros::lcd::print(4, "Blue Alliance Configuration");
-		}
-	}
+	// 	if (selector::auton > 0){ // red side
+	// 		field_orient_offset = -90.0;
+	// 		pros::lcd::print(4, "Red Alliance Configuration");
+	// 	} 
+	// 	else { // blue side
+	// 		field_orient_offset = 90.0;
+	// 		pros::lcd::print(4, "Blue Alliance Configuration");
+	// 	}
+	// }
 }
 
 /**
@@ -170,7 +165,7 @@ vector<PolarVector> scale_vectors(vector<PolarVector> vectors, double translate_
  * Updates each swerve module with the given vectors, 
  * taken in polar coordinates.
  * @param polar_translate_vector A PolarVector containing the translational vector applied in swerve drive.
- * @param yaw_magnitude A value for the yaw applied in swerve drive; negative turns left, positive turns right. From 
+ * @param yaw_magnitude A valu`e for the yaw applied in swerve drive; negative turns left, positive turns right. From 
  * 		
 */
 
@@ -182,6 +177,9 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	
 	// Convert translational vector to add it with the rotational
 	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
+	
+	pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
+	pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
 
 	// If the motion request is based on the absolute angle relative to the field, adjust eh  
 	if (orientation == ABSOLUTE) { 
@@ -191,7 +189,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	// Create all yaw vectors & sum them with translate vector to create summed module vectors
 	for (int i = 0; i < swerve_size; i++){
 		// Create yaw vector
-		PolarVector polar_yaw_vector {yaw_magnitude, default_angles[i]};
+		PolarVector polar_yaw_vector {yaw_magnitude, default_angles[i]+180};
 		RectangularVector yaw_vector = polar_to_rect(polar_yaw_vector);
 		
 		// Add yaw with translate
@@ -204,6 +202,11 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		
 	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
 
+	for (int i = 0; i < swerve_size; i++){ // Print info to brain
+		pros::screen::print(TEXT_SMALL, i+4, "Vec%d (m, 0): (%.2f, %.2f)", i+1, final_vectors[i].mag, final_vectors[i].theta);
+	}
+
+	
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
 		pros::Motor& angle_motor = angle_motors[i];
@@ -302,9 +305,10 @@ void opcontrol() {
 		} else {
 			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
-		
-		if (controller.get_digital_new_press(DIGITAL_L2)){
-			ViperDrive.toggle_blocker();
+
+		// reset all module rotations to unwind cords at the end of matches
+		if (controller.get_digital(DIGITAL_DOWN)){
+			reset_modules();
 		}
 
 		// print gps information to the brain
@@ -319,15 +323,6 @@ void opcontrol() {
 			controller.print(1, 0, "Robot Oriented");
 		}
 
-		// reset all module rotations to unwind cords at the end of matches
-		if (controller.get_digital(DIGITAL_DOWN)){
-			if (controller.get_digital_new_press(DIGITAL_DOWN)){
-				reset_modules();
-				running = false;
-			}
-		}
-		
-
-		pros::delay(20);
+		pros::delay(20); // Try changing to 17? thats 60Hz
 	}
 }

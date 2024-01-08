@@ -44,7 +44,7 @@ double true_error(double initial_degree, double final_degree);
 RectangularVector polar_to_rect(PolarVector polar_vector);
 PolarVector rect_to_polar(RectangularVector rect_vector);
 RectangularVector rotate_rect_vect(RectangularVector rect_vector, double adjust_amount);
-vector<vector<double>> update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation);
+SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double yaw_magnitude, CommandType orientation);
 
 class RobotController {
 public:
@@ -52,7 +52,7 @@ public:
     Point current_position;             // Robot's current position on the field
     double current_angle;               // Robot's current field orientation in degrees
     bool currently_shooting = false;    //
-    bool blocker_state = false;         // Whether the blocker is enabled 
+    //bool blocker_state = false;         // Whether the blocker is enabled 
     CommandType controller_orientation; // Robot's current control mode
 
     void toggle_orientation(){
@@ -77,7 +77,7 @@ public:
                 update_modules(
                     PolarVector {0,0}, 
                     velocity, 
-                    ABSOLUTE
+                    RELATIVE
                     );
                 error = true_error(current_angle, angle);
             }
@@ -129,7 +129,7 @@ public:
     
     void manual_drive(double left_x, double left_y, double right_x) {
         update_modules(
-            PolarVector {hypot(left_x, left_y), atan2(left_y, left_x)},
+            PolarVector {hypot(left_x, left_y), atan2(left_y, left_x)*(180/PI)},
             right_x, 
             controller_orientation
         );
@@ -158,21 +158,6 @@ public:
     //     turnToAngle(targetAngle);
     //     moveForward(distance);
     // }
-
-    // Fire the shooter
-
-    // Toggle the blocker state (raise/lower or open/close)
-    void toggle_blocker() {
-        blocker_state = !blocker_state;
-        if (blocker_state) {
-            left_wing.set_value(true);
-            right_wing.set_value(true);
-        } else {
-            left_wing.set_value(false);
-            right_wing.set_value(false);
-        }
-    }
-
 
 };
 
