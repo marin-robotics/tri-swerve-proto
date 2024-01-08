@@ -302,13 +302,12 @@ void opcontrol() {
 		}
 		else if (controller.get_digital(DIGITAL_B)){
 			ViperDrive.move_in_direction(RELATIVE, 0, 127);
-		} else {
-			ViperDrive.manual_drive(left_x, left_y, right_x);
+		} 
+		else if (controller.get_digital(DIGITAL_DOWN)){
+			reset_modules(); // reset all module rotations to unwind cords
 		}
-
-		// reset all module rotations to unwind cords at the end of matches
-		if (controller.get_digital(DIGITAL_DOWN)){
-			reset_modules();
+		else {
+			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
 
 		// print gps information to the brain
