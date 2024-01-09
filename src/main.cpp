@@ -68,6 +68,7 @@ void initialize() {
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
 	//shooter_motors.move_relative(360, 30); // Wind up shooter
 	gps.set_rotation(0);
+	ViperDrive.set_team_color(RED);
 
 }
 
@@ -178,8 +179,8 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	// Convert translational vector to add it with the rotational
 	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
 	
-	pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
-	pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
+	//pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
+	//pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
 
 	// If the motion request is based on the absolute angle relative to the field, adjust eh  
 	if (orientation == ABSOLUTE) { 
@@ -310,16 +311,23 @@ void opcontrol() {
 			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
 
+		if (controller.get_digital_new_press(DIGITAL_LEFT)){
+			ViperDrive.set_team_color(BLUE);
+		}
+		if (controller.get_digital_new_press(DIGITAL_RIGHT)){
+			ViperDrive.set_team_color(RED);
+		}
+		
 		// print gps information to the brain
-		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
-		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
+		pros::lcd::print(1, "Yaw: %f", ViperDrive.current_angle);
+		pros::lcd::print(2, "X: %f Y: %f", ViperDrive.current_position.x, ViperDrive.current_position.y);
 		
 		// print out orientation mode to controller
 		if (ViperDrive.controller_orientation == ABSOLUTE){
-			controller.print(1, 0, "Field Oriented");
+			controller.print(1, 0, "Field");
 		}
 		else {
-			controller.print(1, 0, "Robot Oriented");
+			controller.print(1, 0, "Robot");
 		}
 
 		pros::delay(20); // Try changing to 17? thats 60Hz
