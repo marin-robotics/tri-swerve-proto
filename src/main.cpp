@@ -1,4 +1,5 @@
 #include "main.h"
+#include "pros/motors.h"
 #include "pros/motors.hpp"
 #include <algorithm>
 #include <cmath>
@@ -55,8 +56,6 @@ bool shooting = false;
 bool match_load_mode = false;
 bool first_loop = true;
 
-
-
 void fire_shooter(){
 	if (!first_loop){
 		if (triball_loaded.get_value()){ // When triball detected
@@ -69,14 +68,10 @@ void fire_shooter(){
 	else {
 		first_loop = false;
 	}
-	
 	while (!shooter_ready.get_value()){ // Winding up until limit switch detects being fully winded 
-		shooter.move_velocity(-100);
+		shooter.move_velocity(-120);
 	}
 	shooter.move_velocity(0);
-	shooter.brake();
-
-
 }
 
 
@@ -91,6 +86,7 @@ void initialize() {
 	//selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+	shooter.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
 	//shooter_motors.move_relative(360, 30); // Wind up shooter
@@ -319,8 +315,10 @@ void opcontrol() {
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
 		if (match_load_mode) {
+			shooter.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 			fire_shooter();
 		} else {
+			shooter.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 			first_loop = true; // if not matchloading, note that the shooter is not wound up
 		}
 
