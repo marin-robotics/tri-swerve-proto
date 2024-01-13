@@ -58,16 +58,25 @@ bool first_loop = true;
 
 
 void fire_shooter(){
-	if (first_loop){first_loop = false;}
-	if (triball_loaded.get_value()){ // When triball detected
-		pros::delay(150); // Wait a moment (to not hit a hand)
-		shooter.move_velocity(-127); // And then run the motor to fire
-		pros::delay(150);// For 150 milliseconds
+	if (!first_loop){
+		if (triball_loaded.get_value()){ // When triball detected
+			pros::delay(150); 			 // Wait a moment (to not hit a hand)
+			shooter.move_velocity(-127); // And then run the motor to fire
+			pros::delay(150);			 // For 150 milliseconds
+			shooter.move_velocity(0);
+		}
 	}
+	else {
+		first_loop = false;
+	}
+	
 	while (!shooter_ready.get_value()){ // Winding up until limit switch detects being fully winded 
-		shooter.move_velocity(-120);
+		shooter.move_velocity(-100);
 	}
 	shooter.move_velocity(0);
+	shooter.brake();
+
+
 }
 
 
@@ -210,7 +219,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		// Create yaw vector
 		PolarVector polar_yaw_vector {yaw_magnitude, default_angles[i]+180};
 		RectangularVector yaw_vector = polar_to_rect(polar_yaw_vector);
-		
+			
 		// Add yaw with translate
 		RectangularVector summed_rect_vector {yaw_vector.x+translate_vector.x, yaw_vector.y+translate_vector.y};
 		PolarVector summed_vector = rect_to_polar(summed_rect_vector);
@@ -221,9 +230,9 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		
 	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
 
-	for (int i = 0; i < swerve_size; i++){ // Print info to brain
-		pros::screen::print(TEXT_SMALL, i+4, "Vec%d (m, 0): (%.2f, %.2f)", i+1, final_vectors[i].mag, final_vectors[i].theta);
-	}
+	// for (int i = 0; i < swerve_size; i++){ // Print info to brain
+	// 	pros::screen::print(TEXT_SMALL, i+4, "Vec%d (m, 0): (%.2f, %.2f)", i+1, final_vectors[i].mag, final_vectors[i].theta);
+	// }
 
 	
 	// iterate through all modules & apply calculated vectors
@@ -314,6 +323,10 @@ void opcontrol() {
 		} else {
 			first_loop = true; // if not matchloading, note that the shooter is not wound up
 		}
+
+		pros::lcd::print(5, "LS TriballIn: %d", triball_loaded.get_value());
+		pros::lcd::print(6, "LS ShootReady: %d", shooter_ready.get_value());
+
 		
 		// Strafing on button presses
 		if (controller.get_digital(DIGITAL_A)){
