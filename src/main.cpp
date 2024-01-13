@@ -52,6 +52,24 @@ RobotController ViperDrive;
 
 // Mechanism Variables
 bool shooting = false;
+bool match_load_mode = false;
+bool first_loop = true;
+
+
+
+void fire_shooter(){
+	if (first_loop){first_loop = false;}
+	if (triball_loaded.get_value()){ // When triball detected
+		pros::delay(150); // Wait a moment (to not hit a hand)
+		shooter.move_velocity(-127); // And then run the motor to fire
+		pros::delay(150);// For 150 milliseconds
+	}
+	while (!shooter_ready.get_value()){ // Winding up until limit switch detects being fully winded 
+		shooter.move_velocity(-120);
+	}
+	shooter.move_velocity(0);
+}
+
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -278,11 +296,11 @@ void opcontrol() {
 		
 		ViperDrive.update_position();
 
-		if (controller.get_digital(DIGITAL_R1)){
-			//pros::Task shoot(fire_shooter);
+		if (controller.get_digital_new_press(DIGITAL_L2)){ // Toggle matchloading mode
+			match_load_mode = !match_load_mode;
 		}
 
-		if (controller.get_digital_new_press(DIGITAL_L1)){
+		if (controller.get_digital_new_press(DIGITAL_L1)){ // Toggle orientation
 			ViperDrive.toggle_orientation();
 		}
 
@@ -291,6 +309,12 @@ void opcontrol() {
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
+		if (match_load_mode) {
+			fire_shooter();
+		} else {
+			first_loop = true; // if not matchloading, note that the shooter is not wound up
+		}
+		
 		// Strafing on button presses
 		if (controller.get_digital(DIGITAL_A)){
 			ViperDrive.move_in_direction(RELATIVE, 0, 127);
