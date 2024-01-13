@@ -52,6 +52,24 @@ RobotController ViperDrive;
 
 // Mechanism Variables
 bool shooting = false;
+bool match_load_mode = false;
+bool first_loop = true;
+
+
+
+void fire_shooter(){
+	if (first_loop){first_loop = false;}
+	if (triball_loaded.get_value()){ // When triball detected
+		pros::delay(150); // Wait a moment (to not hit a hand)
+		shooter.move_velocity(-127); // And then run the motor to fire
+		pros::delay(150);// For 150 milliseconds
+	}
+	while (!shooter_ready.get_value()){ // Winding up until limit switch detects being fully winded 
+		shooter.move_velocity(-120);
+	}
+	shooter.move_velocity(0);
+}
+
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -68,6 +86,7 @@ void initialize() {
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
 	//shooter_motors.move_relative(360, 30); // Wind up shooter
 	gps.set_rotation(0);
+	ViperDrive.set_team_color(RED);
 
 }
 
@@ -178,8 +197,8 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	// Convert translational vector to add it with the rotational
 	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
 	
-	pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
-	pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
+	//pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
+	//pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
 
 	// If the motion request is based on the absolute angle relative to the field, adjust eh  
 	if (orientation == ABSOLUTE) { 
@@ -277,11 +296,11 @@ void opcontrol() {
 		
 		ViperDrive.update_position();
 
-		if (controller.get_digital(DIGITAL_R1)){
-			//pros::Task shoot(fire_shooter);
+		if (controller.get_digital_new_press(DIGITAL_L2)){ // Toggle matchloading mode
+			match_load_mode = !match_load_mode;
 		}
 
-		if (controller.get_digital_new_press(DIGITAL_L1)){
+		if (controller.get_digital_new_press(DIGITAL_L1)){ // Toggle orientation
 			ViperDrive.toggle_orientation();
 		}
 
@@ -290,6 +309,12 @@ void opcontrol() {
 		double left_x = pow_with_sign(double(controller.get_analog(ANALOG_LEFT_X)) / 127);
 		double right_x = pow_with_sign(double(controller.get_analog(ANALOG_RIGHT_X)) / 127);
 
+		if (match_load_mode) {
+			fire_shooter();
+		} else {
+			first_loop = true; // if not matchloading, note that the shooter is not wound up
+		}
+		
 		// Strafing on button presses
 		if (controller.get_digital(DIGITAL_A)){
 			ViperDrive.move_in_direction(RELATIVE, 0, 127);
@@ -310,16 +335,23 @@ void opcontrol() {
 			ViperDrive.manual_drive(left_x, left_y, right_x);
 		}
 
+		if (controller.get_digital_new_press(DIGITAL_LEFT)){
+			ViperDrive.set_team_color(BLUE);
+		}
+		if (controller.get_digital_new_press(DIGITAL_RIGHT)){
+			ViperDrive.set_team_color(RED);
+		}
+		
 		// print gps information to the brain
-		pros::lcd::print(1, "Yaw: %f", gps_status.yaw);
-		pros::lcd::print(2, "X: %f Y: %f", gps_status.x, gps_status.y);
+		pros::lcd::print(1, "Yaw: %f", ViperDrive.current_angle);
+		pros::lcd::print(2, "X: %f Y: %f", ViperDrive.current_position.x, ViperDrive.current_position.y);
 		
 		// print out orientation mode to controller
 		if (ViperDrive.controller_orientation == ABSOLUTE){
-			controller.print(1, 0, "Field Oriented");
+			controller.print(1, 0, "Field");
 		}
 		else {
-			controller.print(1, 0, "Robot Oriented");
+			controller.print(1, 0, "Robot");
 		}
 
 		pros::delay(20); // Try changing to 17? thats 60Hz

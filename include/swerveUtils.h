@@ -2,6 +2,7 @@
 #ifndef SWERVE_UTILS_H
 #define SWERVE_UTILS_H
 
+#include <sys/types.h>
 #include <vector>
 #include <cmath>
 #include "robot_config.h"
@@ -9,6 +10,11 @@
 // The necessary constants and types
 const double PI = 3.14159265358979323846;
 using std::vector; // unused
+
+enum TeamColor{
+    BLUE,
+    RED
+};
 
 enum CommandType {
     RELATIVE,
@@ -49,11 +55,16 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 class RobotController {
 public:
     
+    TeamColor team_color;
     Point current_position;             // Robot's current position on the field
     double current_angle;               // Robot's current field orientation in degrees
     bool currently_shooting = false;    //
     //bool blocker_state = false;         // Whether the blocker is enabled 
     CommandType controller_orientation; // Robot's current control mode
+
+    void set_team_color(TeamColor color){
+        team_color = color;
+    }
 
     void toggle_orientation(){
         if (controller_orientation == ABSOLUTE){
@@ -65,12 +76,18 @@ public:
 
     void update_position() { // GPS while loop updates this
         gps_status = gps.get_status();
-        current_position = {gps_status.x, gps_status.y};
-        current_angle = gps_status.yaw;
+        if (team_color == RED) {
+            current_position = {-gps_status.x, -gps_status.y};
+            current_angle = normalize_angle(gps_status.yaw+180);
+        } else {
+            current_position = {gps_status.x, gps_status.y};
+            current_angle = normalize_angle(gps_status.yaw);
+        }
+        
     }
 
     // Turn to a specific angle
-    void rotate_to_field_angle(CommandType orientation, double angle, double velocity) { // Just rotation vector
+    void rotate_to_field_angle(CommandType orientation, double angle, double velocity=127) { // Just rotation vector
         if (orientation == ABSOLUTE) {
             double error = true_error(current_angle, angle);
             while (abs(int(error)) < 5) {
