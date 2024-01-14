@@ -30,6 +30,7 @@ pros::Motor shooter(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEG
 
 pros::ADIDigitalIn triball_loaded(8); // 8 is H, 1 is A
 pros::ADIDigitalIn shooter_ready(7);
+pros::ADIDigitalIn auton_selector(6);
 
 // Customizable parameters
 int swerve_size = 4;
@@ -41,6 +42,8 @@ double override_theta;
 double override_mag = primaries_rpm*0.6;
 double angle_gear_ratio = 5.5/3;
 int field_orient_offset = -90;
+std::string routes[6] = { "Red Defense", "Red Offense", "Red Nothing", "Blue Defense", "Blue Offense", "Blue Nothing"};
+int selected = 0;
 
 // Swerve Variables
 vector<double> default_angles = {45, 315, 135, 225}; //FL, FR, BL, BR 
@@ -83,13 +86,11 @@ void fire_shooter(){
  */
 void initialize() {
 	pros::lcd::initialize();
-	//selector::init();
 	primary_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
 	shooter.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	angle_motors.tare_position();
 	angle_motors.set_zero_position(90*angle_gear_ratio); // Reset coordinate frame
-	//shooter_motors.move_relative(360, 30); // Wind up shooter
 	gps.set_rotation(0);
 	ViperDrive.set_team_color(RED);
 
@@ -112,19 +113,17 @@ void disabled() {}
  * starts.
  */
 void competition_initialize() {
-	// Calculate the correct coordinate frame shift for each side
-	// while ("WOOOHOOO"){
-	// 	cout << (selector::auton);
-		
-	// 	if (selector::auton > 0){ // red side
-	// 		field_orient_offset = -90.0;
-	// 		pros::lcd::print(4, "Red Alliance Configuration");
-	// 	} 
-	// 	else { // blue side
-	// 		field_orient_offset = 90.0;
-	// 		pros::lcd::print(4, "Blue Alliance Configuration");
-	// 	}
-	// }
+	// Select auton
+	while (true){
+		if (auton_selector.get_new_press()) {
+			if (selected > sizeof(routes)/sizeof(routes[0])-2){
+				selected = 0;
+			} else {
+				selected ++;
+			}
+		}
+		pros::screen::print(TEXT_SMALL, 1, "Selected: %s", routes[selected]);
+	}
 }
 
 /**
@@ -138,7 +137,9 @@ void competition_initialize() {
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {}
+void autonomous() {
+	ViperDrive.autonomous(selected);
+}
 
 
 /**
@@ -328,16 +329,16 @@ void opcontrol() {
 		
 		// Strafing on button presses
 		if (controller.get_digital(DIGITAL_A)){
-			ViperDrive.move_in_direction(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_Y)){
-			ViperDrive.move_in_direction(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_X)){
-			ViperDrive.move_in_direction(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_B)){
-			ViperDrive.move_in_direction(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 0, 127);
 		} 
 		else if (controller.get_digital(DIGITAL_DOWN)){
 			reset_modules(); // reset all module rotations to unwind cords

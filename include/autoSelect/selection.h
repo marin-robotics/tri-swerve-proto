@@ -5,7 +5,7 @@
 //selector configuration
 #define HUE 100
 #define DEFAULT 1
-#define AUTONS "Offensive Side", "Defensive Side", "Do Nothing"
+#define AUTONS "Red Defense", "Red Offense", "Red Defense", "Red Offense"
 
 namespace selector{
 

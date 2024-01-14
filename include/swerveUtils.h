@@ -5,6 +5,9 @@
 #include <sys/types.h>
 #include <vector>
 #include <cmath>
+#include <string>
+#include "pros/misc.h"
+#include "pros/rtos.hpp"
 #include "robot_config.h"
 
 // The necessary constants and types
@@ -60,7 +63,7 @@ public:
     double current_angle;               // Robot's current field orientation in degrees
     bool currently_shooting = false;    //
     //bool blocker_state = false;         // Whether the blocker is enabled 
-    CommandType controller_orientation; // Robot's current control mode
+    CommandType controller_orientation = RELATIVE; // Robot's current control mode
 
     void set_team_color(TeamColor color){
         team_color = color;
@@ -136,14 +139,54 @@ public:
             pros::delay(20); // A delay to prevent CPU overload, adjust as needed
         } while ((error_vector.mag > 10) || (yaw_velocity != 0 && std::abs(angle_error) > 5)); // Check angle only if yaw_velocity is given
     }
-
-    void move_in_direction(CommandType orientation, double angle, double velocity){ // Just translate vector
+    void strafe(CommandType orientation, double angle, double velocity){ // Just translate vector
         update_modules(
             PolarVector {velocity, angle}, 
             0, 
             orientation);
     };
-    
+
+    void autonomous_drive(CommandType orientation, double velocity, double angle, double yaw, int millis_duration){ // Just translate vector
+        int current_time = pros::millis();
+        while (pros::millis()-current_time < millis_duration){
+            update_modules(
+                PolarVector {velocity, angle}, 
+                yaw, 
+                orientation);
+        }
+        update_modules( // Turn of modules
+                PolarVector {0, angle}, 
+                0, 
+                orientation);
+    };
+
+    void autonomous(int route){
+        // Set the team color/side for field oriented controls
+        if (route < 6/2) {
+            set_team_color(RED);
+        } else {
+            set_team_color(BLUE);
+        }
+        // Choose route
+        if (route == 0 || route == 3) { // Defense
+            for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
+                autonomous_drive(RELATIVE, 100, 90, 0, 2000);
+                pros::delay(300);
+                autonomous_drive(RELATIVE, 100, -90, 0, 1000); 
+                pros::delay(300);
+            }        
+        } else if (route == 1 || route == 4) { // Offense
+            for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
+                autonomous_drive(RELATIVE, 100, 90, 0, 2000);
+                pros::delay(300);
+                autonomous_drive(RELATIVE, 100, -90, 0, 1000); 
+                pros::delay(300);
+            }
+        } 
+        // route 2 & 5 are 'do nothing'
+
+    }
+
     void manual_drive(double left_x, double left_y, double right_x) {
         update_modules(
             PolarVector {hypot(left_x, left_y), atan2(left_y, left_x)*(180/PI)},
@@ -162,7 +205,7 @@ public:
         // Basically calculate the point closest to the perimeter of this circle.
         // Then choose the goal as a point left or right of that circle based on the left_x stick
         // Then apply the move_to_position function
-        move_to_position(new_point, move_velocity, target_angle, right_x*127);
+        //move_to_position(new_point, move_velocity, target_angle, right_x*127);
     }
 
 
