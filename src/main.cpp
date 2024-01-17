@@ -123,6 +123,7 @@ void competition_initialize() {
 			}
 		}
 		pros::screen::print(TEXT_SMALL, 1, "Selected: %s", routes[selected]);
+		pros::delay(20);
 	}
 }
 
@@ -332,26 +333,32 @@ void opcontrol() {
 			ViperDrive.strafe(RELATIVE, 0, 127);
 		}
 		else if (controller.get_digital(DIGITAL_Y)){
-			ViperDrive.strafe(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 180, 127);
 		}
 		else if (controller.get_digital(DIGITAL_X)){
-			ViperDrive.strafe(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 90, 127);
 		}
 		else if (controller.get_digital(DIGITAL_B)){
-			ViperDrive.strafe(RELATIVE, 0, 127);
+			ViperDrive.strafe(RELATIVE, 270, 127);
+		}
+
+		else if (controller.get_digital(DIGITAL_RIGHT)){
+			ViperDrive.strafe(ABSOLUTE, 0, 127);
 		} 
+		else if (controller.get_digital(DIGITAL_UP)){
+			ViperDrive.strafe(ABSOLUTE, 90, 127);
+		}
 		else if (controller.get_digital(DIGITAL_DOWN)){
+			ViperDrive.strafe(ABSOLUTE, 270, 127);
+		}
+		else if (controller.get_digital(DIGITAL_LEFT)){
+			ViperDrive.strafe(ABSOLUTE, 180, 127);
+		} 
+		else if (controller.get_digital(DIGITAL_R1)){
 			reset_modules(); // reset all module rotations to unwind cords
 		}
 		else {
 			ViperDrive.manual_drive(left_x, left_y, right_x);
-		}
-
-		if (controller.get_digital_new_press(DIGITAL_LEFT)){
-			ViperDrive.set_team_color(BLUE);
-		}
-		if (controller.get_digital_new_press(DIGITAL_RIGHT)){
-			ViperDrive.set_team_color(RED);
 		}
 		
 		// print gps information to the brain
@@ -360,10 +367,10 @@ void opcontrol() {
 		
 		// print out orientation mode to controller
 		if (ViperDrive.controller_orientation == ABSOLUTE){
-			controller.print(1, 0, "Field");
+			controller.print(1, 0, "[Field] ML: %d", match_load_mode);
 		}
 		else {
-			controller.print(1, 0, "Robot");
+			controller.print(1, 0, "[Robot] ML: %d", match_load_mode);
 		}
 
 		pros::delay(20); // Try changing to 17? thats 60Hz

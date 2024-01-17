@@ -169,17 +169,19 @@ public:
         }
         // Choose route
         if (route == 0 || route == 3) { // Defense
+            autonomous_drive(RELATIVE, 100, 90, 0, 1000);
             for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
-                autonomous_drive(RELATIVE, 100, 90, 0, 2000);
+                autonomous_drive(RELATIVE, 300, -90, 0, 250); 
                 pros::delay(300);
-                autonomous_drive(RELATIVE, 100, -90, 0, 1000); 
+                autonomous_drive(RELATIVE, 500, 90, 0, 500);
                 pros::delay(300);
-            }        
+            }
         } else if (route == 1 || route == 4) { // Offense
+            autonomous_drive(RELATIVE, 100, 90, 0, 1000);
             for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
-                autonomous_drive(RELATIVE, 100, 90, 0, 2000);
+                autonomous_drive(RELATIVE, 300, -90, 0, 250); 
                 pros::delay(300);
-                autonomous_drive(RELATIVE, 100, -90, 0, 1000); 
+                autonomous_drive(RELATIVE, 500, 90, 0, 500);
                 pros::delay(300);
             }
         } 
