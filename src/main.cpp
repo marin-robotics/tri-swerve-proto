@@ -53,6 +53,8 @@ RectangularVector yaw_vector;
 PolarVector summed_polar_vector;
 vector<PolarVector> final_vectors;
 RobotController ViperDrive;
+double kP = 4.23;
+double kD = 0;
 
 // Mechanism Variables
 bool shooting = false;
@@ -200,13 +202,11 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	vector<double> angle_errors(swerve_size, 0); // Error values for the angle motors (final - current positions)
 	vector<double> angle_velocities(swerve_size, 0); // Angle motor velocities
 	vector<double> primary_velocities(swerve_size, 0);
-	
+	int largest_angle_error = 0;
+
 	// Convert translational vector to add it with the rotational
 	RectangularVector translate_vector = polar_to_rect(polar_translate_vector);
 	
-	//pros::screen::print(TEXT_SMALL, 1, "polTran (m, 0): (%.2f, %.2f)", polar_translate_vector.mag, polar_translate_vector.theta);
-	//pros::screen::print(TEXT_SMALL, 2, "recTran (x, y): (%.2f, %.2f)", translate_vector.x, translate_vector.y);
-
 	// If the motion request is based on the absolute angle relative to the field, adjust eh  
 	if (orientation == ABSOLUTE) { 
 		translate_vector = rotate_rect_vect(translate_vector, (ViperDrive.current_angle+field_orient_offset));
@@ -227,11 +227,6 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	}
 		
 	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
-
-	// for (int i = 0; i < swerve_size; i++){ // Print info to brain
-	// 	pros::screen::print(TEXT_SMALL, i+4, "Vec%d (m, 0): (%.2f, %.2f)", i+1, final_vectors[i].mag, final_vectors[i].theta);
-	// }
-
 	
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
@@ -252,14 +247,21 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		}
 
 		// Calculate true error between our current position and the new target
-		double error = true_error(target_theta, current_position);
+		double angle_error = true_error(target_theta, current_position);
 		// Log error to return later
-		angle_errors.at(i) = error;
-		   
+		angle_errors.at(i) = angle_error;
+		if (abs(int(angle_error)) > largest_angle_error) {
+			largest_angle_error = abs(int(angle_error));
+		}
+	}
+	pros::lcd::print(4, "Largest Angle Error %d", largest_angle_error);
+	for (int i = 0; i < swerve_size; i++){  
+		pros::Motor& angle_motor = angle_motors[i];
+		pros::Motor& primary_motor = primary_motors[i];
 		// Change angle at a proportional speed with deadzone based on magnitude
 		if (final_vectors[i].mag > 0.00) // mag > 0?
 		{
-			double angle_motor_velocity = (127.0/30.0) * error; // divisor is the point where speed reaches max
+			double angle_motor_velocity = kP * angle_errors[i] + kD * angle_motor.get_actual_velocity(); // REPLACE THIS WITH PID
 			angle_velocities.at(i) = angle_motor_velocity;
 			angle_motor = angle_motor_velocity;
 
@@ -268,7 +270,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		}
 
 		// Change primary velocities
-		double primary_motor_velocity = int(final_vectors[i].mag*primaries_rpm);
+		double primary_motor_velocity = int(final_vectors[i].mag*primaries_rpm*(cos(largest_angle_error*(PI/180))));
 		primary_velocities.at(i) = primary_motor_velocity;
 		primary_motor.move_velocity(primary_motor_velocity);
 	}
