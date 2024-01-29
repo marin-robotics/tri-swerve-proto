@@ -270,7 +270,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		}
 
 		// Change primary velocities
-		double primary_motor_velocity = int(final_vectors[i].mag*primaries_rpm*(cos(largest_angle_error*(PI/180))));
+		double primary_motor_velocity = int(final_vectors[i].mag*primaries_rpm*cos(largest_angle_error*0.8*(PI/180)));
 		primary_velocities.at(i) = primary_motor_velocity;
 		primary_motor.move_velocity(primary_motor_velocity);
 	}
