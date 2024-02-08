@@ -13,15 +13,15 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 pros::GPS gps(13);
 pros::c::gps_status_s_t gps_status;
 
-pros::Motor front_left_primary(1, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_primary(10, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_primary(3,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_primary(8,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_left_primary(8, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_primary(3, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_primary(10,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_primary(4,pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::Motor front_left_angle(2, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right_angle(21, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left_angle(11,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right_angle(9,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_left_angle(9, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor front_right_angle(1, pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_left_angle(21,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor back_right_angle(2,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENCODER_DEGREES);
 
 pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
 pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
