@@ -215,7 +215,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 	// Create all yaw vectors & sum them with translate vector to create summed module vectors
 	for (int i = 0; i < swerve_size; i++){
 		// Create yaw vector
-		PolarVector polar_yaw_vector {yaw_magnitude, default_angles[i]+180};
+		PolarVector polar_yaw_vector {-yaw_magnitude, default_angles[i]+180};
 		RectangularVector yaw_vector = polar_to_rect(polar_yaw_vector);
 			
 		// Add yaw with translate
@@ -226,7 +226,7 @@ SwerveModuleTelemetry update_modules(PolarVector polar_translate_vector, double 
 		module_vectors.at(i) = summed_vector;
 	}
 		
-	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, yaw_magnitude);
+	final_vectors = scale_vectors(module_vectors, polar_translate_vector.mag, -yaw_magnitude);
 	
 	// iterate through all modules & apply calculated vectors
 	for (int i = 0; i < swerve_size; i++){
