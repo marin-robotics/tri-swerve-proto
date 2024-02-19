@@ -10,7 +10,7 @@
 using namespace std;
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);	
-pros::GPS gps(13);
+pros::GPS gps(11);
 pros::c::gps_status_s_t gps_status;
 
 pros::Motor front_left_primary(8, pros::E_MOTOR_GEAR_BLUE, false, pros::E_MOTOR_ENCODER_DEGREES);
@@ -26,11 +26,11 @@ pros::Motor back_right_angle(2,pros::E_MOTOR_GEAR_GREEN, true, pros::E_MOTOR_ENC
 pros::Motor_Group primary_motors {front_left_primary, front_right_primary, back_left_primary, back_right_primary};
 pros::Motor_Group angle_motors {front_left_angle, front_right_angle, back_left_angle, back_right_angle};
 
-pros::Motor shooter(20, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
+pros::Motor shooter(19, pros::E_MOTOR_GEAR_RED, false, pros::E_MOTOR_ENCODER_DEGREES);
 
-pros::ADIDigitalIn triball_loaded(8); // 8 is H, 1 is A
+pros::ADIDigitalIn triball_loaded(6); // 8 is H, 1 is A
 pros::ADIDigitalIn shooter_ready(7);
-pros::ADIDigitalIn auton_selector(6);
+pros::ADIDigitalIn auton_selector(8);
 
 // Customizable parameters
 int swerve_size = 4;
@@ -53,7 +53,7 @@ RectangularVector yaw_vector;
 PolarVector summed_polar_vector;
 vector<PolarVector> final_vectors;
 RobotController ViperDrive;
-double kP = 4.23;
+double kP = 4.23; // k-vars for proportional and derivative components
 double kD = 0;
 
 // Mechanism Variables
@@ -66,7 +66,7 @@ void fire_shooter(){
 		if (triball_loaded.get_value()){ // When triball detected
 			pros::delay(150); 			 // Wait a moment (to not hit a hand)
 			shooter.move_velocity(-127); // And then run the motor to fire
-			pros::delay(150);			 // For 150 milliseconds
+			pros::delay(250);			 // For 250 milliseconds
 			shooter.move_velocity(0);
 		}
 	}
