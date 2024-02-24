@@ -64,6 +64,10 @@ public:
     bool currently_shooting = false;    //
     //bool blocker_state = false;         // Whether the blocker is enabled 
     CommandType controller_orientation = RELATIVE; // Robot's current control mode
+    
+    // variables
+    int swerve_size = 4;
+    double angle_gear_ratio = 5.5/3;
 
     void set_team_color(TeamColor color){
         team_color = color;
@@ -74,6 +78,15 @@ public:
             controller_orientation = RELATIVE;
         } else if (controller_orientation == RELATIVE){
             controller_orientation = ABSOLUTE;
+        }
+    }
+
+    /**
+     * Resets modules to absolute zero to untangle wires at the end of a match.
+    */
+    void reset_modules(){
+        for (int i = 0; i < swerve_size; i++){
+            angle_motors[i].move_absolute((90*angle_gear_ratio), 200);
         }
     }
 
@@ -154,8 +167,22 @@ public:
                 yaw, 
                 orientation);
         }
-        update_modules( // Turn of modules
+        update_modules( // Turn off modules
                 PolarVector {0, angle}, 
+                0, 
+                orientation);
+    };
+
+    void autonomous_spin(CommandType orientation, double yaw, int millis_duration){
+        int current_time = pros::millis();
+        while (pros::millis()-current_time < millis_duration){
+            update_modules(
+                PolarVector {0, 0}, 
+                yaw, 
+                orientation);
+        }
+        update_modules( // Turn off modules
+                PolarVector {0, 0}, 
                 0, 
                 orientation);
     };
@@ -169,6 +196,8 @@ public:
         }
         // Choose route
         if (route == 0 || route == 3) { // Defense
+
+            // old routine
             autonomous_drive(RELATIVE, 100, 90, 0, 1000);
             for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
                 autonomous_drive(RELATIVE, 300, -90, 0, 250); 
@@ -176,6 +205,18 @@ public:
                 autonomous_drive(RELATIVE, 500, 90, 0, 500);
                 pros::delay(300);
             }
+            
+            // new routine (needs refinement but will be better)
+            // for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
+            //     autonomous_drive(RELATIVE, 100, 90, 0, 1000); // go forward
+            //     pros::delay(300);
+            //     autonomous_drive(RELATIVE, 100, -90, 0, 1000); // back up
+            //     pros::delay(300);
+            //     autonomous_drive(ABSOLUTE, 100, 90, 0, 500); // move sideways
+            // }
+
+            reset_modules();
+            pros::delay(2500);
         } else if (route == 1 || route == 4) { // Offense
             autonomous_drive(RELATIVE, 100, 90, 0, 1000);
             for (int i = 0; i < 3; i++){ // Ram preload into goal 3 times
@@ -184,6 +225,8 @@ public:
                 autonomous_drive(RELATIVE, 500, 90, 0, 500);
                 pros::delay(300);
             }
+            reset_modules();
+            pros::delay(2500);
         } 
         // route 2 & 5 are 'do nothing'
 
